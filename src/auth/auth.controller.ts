@@ -1,19 +1,21 @@
 import {
-  Controller,
-  Post,
   Body,
+  Controller,
+  Get,
   HttpCode,
   HttpStatus,
-  UseGuards,
-  Get,
+  Post,
   Request,
-  ValidationPipe,
   UnauthorizedException,
+  UseGuards,
+  ValidationPipe,
 } from '@nestjs/common';
+import { plainToClass } from 'class-transformer';
 import { AuthService } from './auth.service';
-import { SignUpDto } from './dto/signup.dto';
-import { SignInDto } from './dto/signin.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
+import { SignInDto } from './dto/signin.dto';
+import { SignUpDto } from './dto/signup.dto';
+import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import type { AuthRequest } from './interfaces/auth-request.interface';
 
@@ -61,7 +63,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async logout(@Request() req: AuthRequest): Promise<{ message: string }> {
     // Extract token from Authorization header
-    const authHeader = req.headers['authorization'] as string | undefined;
+    const authHeader = req.headers['authorization'] ?? '';
     const token = authHeader?.substring(7); // Remove 'Bearer ' prefix
 
     if (!token) {
@@ -71,5 +73,32 @@ export class AuthController {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
     const response: { message: string } = await this.authService.logout(token);
     return { message: response.message };
+  }
+
+  @Get('google')
+  @UseGuards(GoogleAuthGuard)
+  // This route triggers the OAuth flow
+  async googleAuth(): Promise<void> {}
+
+  @Get('google/callback')
+  @UseGuards(GoogleAuthGuard)
+  async googleAuthCallback(
+    @Request() req: AuthRequest,
+  ): Promise<AuthResponseDto> {
+    // req.user is set by GoogleStrategy.validate and is a User entity
+    const user = req.user;
+    const { accessToken, expiresIn } = await this.authService.refreshToken(
+      user.id,
+    );
+
+    const userResponse = plainToClass(AuthResponseDto, user, {
+      excludeExtraneousValues: true,
+    });
+
+    return {
+      ...userResponse,
+      accessToken,
+      expiresIn,
+    };
   }
 }

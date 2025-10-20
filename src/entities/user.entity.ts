@@ -18,9 +18,9 @@ export class User {
   @Column({ unique: true })
   email: string;
 
-  @Column()
+  @Column({ nullable: true })
   @Exclude()
-  password: string;
+  password: string | null;
 
   @Column()
   firstName: string;
@@ -40,6 +40,9 @@ export class User {
   @UpdateDateColumn()
   updatedAt: Date;
 
+  @Column({ nullable: true, unique: true })
+  googleId: string | null;
+
   @BeforeInsert()
   @BeforeUpdate()
   async hashPassword() {
@@ -50,6 +53,9 @@ export class User {
   }
 
   async validatePassword(password: string): Promise<boolean> {
-    return bcrypt.compare(password, this.password);
+    if (!this.password) {
+      return false;
+    }
+    return await bcrypt.compare(password, this.password);
   }
 }

@@ -48,6 +48,42 @@ export class UsersService {
     return user;
   }
 
+  async upsertFromGoogleProfile(profile: {
+    googleId: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+  }): Promise<User> {
+    const existingByGoogle = await this.userRepository.findOne({
+      where: { googleId: profile.googleId },
+    });
+
+    if (existingByGoogle) {
+      return existingByGoogle;
+    }
+
+    const existingByEmail = await this.userRepository.findOne({
+      where: { email: profile.email },
+    });
+
+    if (existingByEmail) {
+      existingByEmail.googleId = profile.googleId;
+      if (!existingByEmail.firstName) existingByEmail.firstName = profile.firstName;
+      if (!existingByEmail.lastName) existingByEmail.lastName = profile.lastName;
+      return await this.userRepository.save(existingByEmail);
+    }
+
+    const user = this.userRepository.create({
+      email: profile.email,
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      password: null,
+      googleId: profile.googleId,
+    } as Partial<User>);
+
+    return await this.userRepository.save(user);
+  }
+
   async updateLastLogin(id: string): Promise<void> {
     await this.userRepository.update(id, {
       lastLoginAt: new Date(),
