@@ -8,9 +8,29 @@ import {
 import { ApiProperty } from '@nestjs/swagger';
 
 export class SignUpDto {
-  @ApiProperty({ example: 'user@example.com', description: 'User email', required: true })
+  @ApiProperty({
+    example: 'user@example.com',
+    description: 'User email',
+    required: true,
+  })
   @IsEmail({}, { message: 'Please provide a valid email address' })
   email: string;
+
+  @ApiProperty({
+    example: '+1234567890',
+    description: 'Phone number (international format supported)',
+    required: true,
+  })
+  @IsString()
+  @MinLength(7, { message: 'Phone number must be at least 7 characters long' })
+  @MaxLength(20, { message: 'Phone number must not exceed 20 characters' })
+  @Matches(
+    /^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/,
+    {
+      message: 'Please provide a valid phone number',
+    },
+  )
+  phoneNumber: string;
 
   @ApiProperty({
     example: 'P@ssw0rd!23',

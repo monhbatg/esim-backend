@@ -53,8 +53,8 @@ export class AuthService {
   }
 
   async signIn(signInDto: SignInDto): Promise<AuthResponseDto> {
-    // Find user by email
-    const user = await this.usersService.findByEmail(signInDto.email);
+    // Find user by email with password included
+    const user = await this.usersService.findByEmail(signInDto.email, true);
 
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
@@ -124,7 +124,7 @@ export class AuthService {
    * @param token - The JWT token to invalidate
    * @returns Success message
    */
-  async logout(token: string): Promise<{ message: string }> {
+  logout(token: string): { message: string } {
     // Add token to blacklist
     this.tokenBlacklistService.addToBlacklist(token);
 

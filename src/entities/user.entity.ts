@@ -28,6 +28,9 @@ export class User {
   @Column()
   lastName: string;
 
+  @Column({ default: 'NOT_PROVIDED' })
+  phoneNumber: string;
+
   @Column({ default: true })
   isActive: boolean;
 

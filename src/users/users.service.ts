@@ -30,7 +30,14 @@ export class UsersService {
     return await this.userRepository.save(user);
   }
 
-  async findByEmail(email: string): Promise<User | null> {
+  async findByEmail(email: string, includePassword = false): Promise<User | null> {
+    if (includePassword) {
+      return await this.userRepository
+        .createQueryBuilder('user')
+        .addSelect('user.password')
+        .where('user.email = :email', { email })
+        .getOne();
+    }
     return await this.userRepository.findOne({
       where: { email },
     });
@@ -68,8 +75,10 @@ export class UsersService {
 
     if (existingByEmail) {
       existingByEmail.googleId = profile.googleId;
-      if (!existingByEmail.firstName) existingByEmail.firstName = profile.firstName;
-      if (!existingByEmail.lastName) existingByEmail.lastName = profile.lastName;
+      if (!existingByEmail.firstName)
+        existingByEmail.firstName = profile.firstName;
+      if (!existingByEmail.lastName)
+        existingByEmail.lastName = profile.lastName;
       return await this.userRepository.save(existingByEmail);
     }
 
