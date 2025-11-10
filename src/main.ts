@@ -7,6 +7,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   // Enable CORS
+  const isProduction = process.env.NODE_ENV === 'production';
   const allowedOrigins = process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',').map((origin) => origin.trim())
     : [
@@ -15,6 +16,20 @@ async function bootstrap() {
         'http://localhost:5173',
         'http://localhost:5174',
       ];
+
+  // Always include localhost origins for development
+  const defaultLocalhostOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3001',
+  ];
+
+  const allAllowedOrigins = isProduction
+    ? allowedOrigins
+    : [...new Set([...allowedOrigins, ...defaultLocalhostOrigins])];
 
   app.enableCors({
     origin: (
@@ -27,19 +42,29 @@ async function bootstrap() {
         return;
       }
 
-      // In production, check against allowed origins
-      if (process.env.NODE_ENV === 'production') {
-        // Check exact match or if origin is in allowed list
-        if (allowedOrigins.includes(origin)) {
+      // In development, always allow localhost and all origins
+      if (!isProduction) {
+        // Check if it's a localhost origin
+        if (
+          origin.startsWith('http://localhost') ||
+          origin.startsWith('http://127.0.0.1') ||
+          origin.startsWith('http://0.0.0.0')
+        ) {
           callback(null, true);
-        } else {
-          // Log for debugging (remove in production if needed)
-          console.warn(`CORS blocked origin: ${origin}`);
-          callback(new Error('Not allowed by CORS'));
+          return;
         }
-      } else {
         // In development, allow all origins
         callback(null, true);
+        return;
+      }
+
+      // In production, check against allowed origins
+      if (allAllowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        // Log for debugging
+        console.warn(`CORS blocked origin: ${origin}`);
+        callback(new Error('Not allowed by CORS'));
       }
     },
     credentials: true,
