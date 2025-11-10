@@ -8,66 +8,26 @@ async function bootstrap() {
 
   // Enable CORS
   const isProduction = process.env.NODE_ENV === 'production';
-  const allowedOrigins = process.env.CORS_ORIGINS
-    ? process.env.CORS_ORIGINS.split(',').map((origin) => origin.trim())
-    : [
-        'http://localhost:3000',
-        'http://localhost:3001',
-        'http://localhost:5173',
-        'http://localhost:5174',
-      ];
+  
+  // In development, allow all origins. In production, use CORS_ORIGINS env var
+  const corsOptions = isProduction
+    ? {
+        origin: process.env.CORS_ORIGINS
+          ? process.env.CORS_ORIGINS.split(',').map((origin) => origin.trim())
+          : ['https://www.goysim.mn', 'https://goysim.mn'],
+        credentials: true,
+      }
+    : {
+        origin: true, // Allow all origins in development
+        credentials: true,
+      };
 
-  // Always include localhost origins for development
-  const defaultLocalhostOrigins = [
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'http://127.0.0.1:3000',
-    'http://127.0.0.1:3001',
-  ];
-
-  const allAllowedOrigins = isProduction
-    ? allowedOrigins
-    : [...new Set([...allowedOrigins, ...defaultLocalhostOrigins])];
+  console.log(
+    `CORS Configuration: ${isProduction ? 'Production' : 'Development'} mode - ${isProduction ? 'Restricted origins' : 'All origins allowed'}`,
+  );
 
   app.enableCors({
-    origin: (
-      origin: string | undefined,
-      callback: (err: Error | null, allow?: boolean) => void,
-    ) => {
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) {
-        callback(null, true);
-        return;
-      }
-
-      // In development, always allow localhost and all origins
-      if (!isProduction) {
-        // Check if it's a localhost origin
-        if (
-          origin.startsWith('http://localhost') ||
-          origin.startsWith('http://127.0.0.1') ||
-          origin.startsWith('http://0.0.0.0')
-        ) {
-          callback(null, true);
-          return;
-        }
-        // In development, allow all origins
-        callback(null, true);
-        return;
-      }
-
-      // In production, check against allowed origins
-      if (allAllowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        // Log for debugging
-        console.warn(`CORS blocked origin: ${origin}`);
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
-    credentials: true,
+    ...corsOptions,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
       'Content-Type',
