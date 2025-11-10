@@ -2,11 +2,16 @@ import {
   Injectable,
   ConflictException,
   NotFoundException,
+  BadRequestException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
 import { SignUpDto } from '../auth/dto/signup.dto';
+import { UpdateUserPreferencesDto } from './dto/user-preferences.dto';
+import { UpdatePasswordDto } from './dto/update-password.dto';
+import { UserStatsResponseDto } from './dto/user-response.dto';
 
 @Injectable()
 export class UsersService {
@@ -30,7 +35,10 @@ export class UsersService {
     return await this.userRepository.save(user);
   }
 
-  async findByEmail(email: string, includePassword = false): Promise<User | null> {
+  async findByEmail(
+    email: string,
+    includePassword = false,
+  ): Promise<User | null> {
     if (includePassword) {
       return await this.userRepository
         .createQueryBuilder('user')
@@ -120,5 +128,111 @@ export class UsersService {
     await this.userRepository.update(id, {
       isActive: true,
     });
+  }
+
+  async updatePreferences(
+    id: string,
+    preferences: UpdateUserPreferencesDto,
+  ): Promise<User> {
+    const user = await this.findById(id);
+
+    if (preferences.preferredCurrency) {
+      user.preferredCurrency = preferences.preferredCurrency;
+    }
+    if (preferences.preferredLanguage) {
+      user.preferredLanguage = preferences.preferredLanguage;
+    }
+    if (preferences.emailNotifications !== undefined) {
+      user.emailNotifications = preferences.emailNotifications;
+    }
+    if (preferences.smsNotifications !== undefined) {
+      user.smsNotifications = preferences.smsNotifications;
+    }
+    if (preferences.pushNotifications !== undefined) {
+      user.pushNotifications = preferences.pushNotifications;
+    }
+    if (preferences.favoriteCountries !== undefined) {
+      user.favoriteCountries = preferences.favoriteCountries;
+    }
+    if (preferences.timezone) {
+      user.timezone = preferences.timezone;
+    }
+
+    return await this.userRepository.save(user);
+  }
+
+  async getPreferences(id: string): Promise<Partial<User>> {
+    const user = await this.findById(id);
+    return {
+      preferredCurrency: user.preferredCurrency,
+      preferredLanguage: user.preferredLanguage,
+      emailNotifications: user.emailNotifications,
+      smsNotifications: user.smsNotifications,
+      pushNotifications: user.pushNotifications,
+      favoriteCountries: user.favoriteCountries,
+      timezone: user.timezone,
+    };
+  }
+
+  async changePassword(
+    id: string,
+    passwordDto: UpdatePasswordDto,
+  ): Promise<void> {
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .addSelect('user.password')
+      .where('user.id = :id', { id })
+      .getOne();
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.password) {
+      throw new BadRequestException(
+        'Password change not available for accounts without a password',
+      );
+    }
+
+    const isCurrentPasswordValid = await user.validatePassword(
+      passwordDto.currentPassword,
+    );
+
+    if (!isCurrentPasswordValid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    // Update password (will be hashed by BeforeUpdate hook)
+    user.password = passwordDto.newPassword;
+    await this.userRepository.save(user);
+  }
+
+  async getUserStats(id: string): Promise<UserStatsResponseDto> {
+    const user = await this.findById(id);
+
+    // TODO: Replace with actual queries when orders/purchases tables are implemented
+    // For now, return placeholder stats
+    return {
+      totalPurchases: 0,
+      totalSpent: 0,
+      activeESims: 0,
+      countriesVisited: user.favoriteCountries?.length || 0,
+      firstPurchaseAt: null,
+      lastPurchaseAt: null,
+    };
+  }
+
+  async getProfile(id: string): Promise<User> {
+    return await this.findById(id);
+  }
+
+  async deleteAccount(id: string): Promise<void> {
+    // Verify user exists
+    await this.findById(id);
+    // Soft delete by deactivating
+    await this.deactivateUser(id);
+    // Optionally, you could also delete the user record:
+    // const user = await this.findById(id);
+    // await this.userRepository.remove(user);
   }
 }

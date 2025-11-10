@@ -46,6 +46,28 @@ export class User {
   @Column({ type: 'varchar', nullable: true, unique: true })
   googleId: string | null;
 
+  // User Preferences
+  @Column({ type: 'varchar', default: 'USD', nullable: true })
+  preferredCurrency: string;
+
+  @Column({ type: 'varchar', default: 'en', nullable: true })
+  preferredLanguage: string;
+
+  @Column({ type: 'boolean', default: true })
+  emailNotifications: boolean;
+
+  @Column({ type: 'boolean', default: true })
+  smsNotifications: boolean;
+
+  @Column({ type: 'boolean', default: true })
+  pushNotifications: boolean;
+
+  @Column({ type: 'json', nullable: true })
+  favoriteCountries: string[] | null;
+
+  @Column({ type: 'varchar', default: 'UTC', nullable: true })
+  timezone: string;
+
   @BeforeInsert()
   @BeforeUpdate()
   async hashPassword() {

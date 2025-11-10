@@ -1,0 +1,282 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Patch,
+  Put,
+  Request,
+  UseGuards,
+  ValidationPipe,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import type { AuthRequest } from '../auth/interfaces/auth-request.interface';
+import { UsersService } from './users.service';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { UpdatePasswordDto } from './dto/update-password.dto';
+import {
+  UpdateUserPreferencesDto,
+  UserPreferencesDto,
+} from './dto/user-preferences.dto';
+import {
+  UserProfileResponseDto,
+  UserStatsResponseDto,
+} from './dto/user-response.dto';
+
+@ApiTags('users')
+@Controller('users')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
+export class UsersController {
+  constructor(private readonly usersService: UsersService) {}
+
+  @Get('profile')
+  @ApiOperation({
+    summary: 'Get current user profile',
+    description: 'Retrieve the authenticated user profile with preferences',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User profile retrieved successfully',
+    type: UserProfileResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async getProfile(
+    @Request() req: AuthRequest,
+  ): Promise<UserProfileResponseDto> {
+    const user = await this.usersService.getProfile(req.user.id);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password: _password, ...profile } = user;
+    return profile as UserProfileResponseDto;
+  }
+
+  @Get('me')
+  @ApiOperation({
+    summary: 'Get current user profile (alias)',
+    description: 'Alias for GET /users/profile',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User profile retrieved successfully',
+    type: UserProfileResponseDto,
+  })
+  async getMe(@Request() req: AuthRequest): Promise<UserProfileResponseDto> {
+    return this.getProfile(req);
+  }
+
+  @Patch('profile')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Update user profile',
+    description:
+      'Update user profile information (firstName, lastName, phoneNumber)',
+  })
+  @ApiBody({ type: UpdateProfileDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Profile updated successfully',
+    type: UserProfileResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid input data',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async updateProfile(
+    @Request() req: AuthRequest,
+    @Body(ValidationPipe) updateProfileDto: UpdateProfileDto,
+  ): Promise<UserProfileResponseDto> {
+    const user = await this.usersService.updateUser(
+      req.user.id,
+      updateProfileDto,
+    );
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password: _password, ...profile } = user;
+    return profile as UserProfileResponseDto;
+  }
+
+  @Put('password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Change user password',
+    description: 'Update user password with current password verification',
+  })
+  @ApiBody({ type: UpdatePasswordDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Password changed successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example: 'Password changed successfully',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid input data or password change not available',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid current password or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async changePassword(
+    @Request() req: AuthRequest,
+    @Body(ValidationPipe) updatePasswordDto: UpdatePasswordDto,
+  ): Promise<{ message: string }> {
+    await this.usersService.changePassword(req.user.id, updatePasswordDto);
+    return { message: 'Password changed successfully' };
+  }
+
+  @Get('preferences')
+  @ApiOperation({
+    summary: 'Get user preferences',
+    description:
+      'Retrieve user preferences (currency, language, notifications, etc.)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User preferences retrieved successfully',
+    type: UserPreferencesDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async getPreferences(
+    @Request() req: AuthRequest,
+  ): Promise<UserPreferencesDto> {
+    return (await this.usersService.getPreferences(
+      req.user.id,
+    )) as UserPreferencesDto;
+  }
+
+  @Put('preferences')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Update user preferences',
+    description:
+      'Update user preferences including currency, language, notifications, and favorite countries',
+  })
+  @ApiBody({ type: UpdateUserPreferencesDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Preferences updated successfully',
+    type: UserPreferencesDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid input data',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async updatePreferences(
+    @Request() req: AuthRequest,
+    @Body(ValidationPipe) updatePreferencesDto: UpdateUserPreferencesDto,
+  ): Promise<UserPreferencesDto> {
+    const user = await this.usersService.updatePreferences(
+      req.user.id,
+      updatePreferencesDto,
+    );
+    return (await this.usersService.getPreferences(
+      user.id,
+    )) as UserPreferencesDto;
+  }
+
+  @Get('stats')
+  @ApiOperation({
+    summary: 'Get user statistics',
+    description:
+      'Retrieve user statistics including purchase history, spending, and activity',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User statistics retrieved successfully',
+    type: UserStatsResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async getStats(@Request() req: AuthRequest): Promise<UserStatsResponseDto> {
+    return await this.usersService.getUserStats(req.user.id);
+  }
+
+  @Delete('account')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Delete user account',
+    description: 'Deactivate and delete user account (soft delete)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Account deleted successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example: 'Account deleted successfully',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async deleteAccount(
+    @Request() req: AuthRequest,
+  ): Promise<{ message: string }> {
+    await this.usersService.deleteAccount(req.user.id);
+    return { message: 'Account deleted successfully' };
+  }
+}
