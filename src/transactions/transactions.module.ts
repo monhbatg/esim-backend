@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TransactionsService } from './transactions.service';
 import { TransactionsController } from './transactions.controller';
@@ -11,11 +11,10 @@ import { AuthModule } from '../auth/auth.module';
   imports: [
     TypeOrmModule.forFeature([Transaction, ESimPurchase]),
     WalletModule, // Import WalletModule to use WalletService
-    AuthModule, // Import AuthModule to access TokenBlacklistService for JwtAuthGuard
+    forwardRef(() => AuthModule), // Import AuthModule to access TokenBlacklistService for JwtAuthGuard
   ],
   controllers: [TransactionsController],
   providers: [TransactionsService],
   exports: [TransactionsService], // Export for use in other modules if needed
 })
 export class TransactionsModule {}
-
