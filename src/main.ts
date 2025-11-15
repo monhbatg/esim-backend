@@ -7,14 +7,57 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   // Enable CORS
-  const isProduction = process.env.NODE_ENV === 'production';
+  const isProduction =
+    process.env.NODE_ENV === 'production' ||
+    process.env.VERCEL_ENV === 'production';
 
-  // In development, allow all origins. In production, use CORS_ORIGINS env var
+  // Localhost origins that should always be allowed (for development/testing)
+  const localhostOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3001',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:5174',
+  ];
+
+  // In development, allow all origins. In production, use CORS_ORIGINS env var + localhost
   const corsOptions = isProduction
     ? {
-        origin: process.env.CORS_ORIGINS
-          ? process.env.CORS_ORIGINS.split(',').map((origin) => origin.trim())
-          : ['https://www.goysim.mn', 'https://goysim.mn'],
+        origin: (
+          origin: string | undefined,
+          callback: (err: Error | null, allow?: boolean) => void,
+        ) => {
+          const allowedOrigins = process.env.CORS_ORIGINS
+            ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
+            : ['https://www.goysim.mn', 'https://goysim.mn'];
+
+          // Combine production origins with localhost origins
+          const allAllowedOrigins = [...allowedOrigins, ...localhostOrigins];
+
+          // Allow requests with no origin (like mobile apps or curl requests)
+          if (!origin) {
+            return callback(null, true);
+          }
+
+          // Check if origin is localhost or in allowed list
+          const isLocalhost = localhostOrigins.some((lo) =>
+            origin.startsWith(lo.replace(/:\d+$/, '')),
+          );
+
+          if (allAllowedOrigins.includes(origin) || isLocalhost) {
+            callback(null, true);
+          } else {
+            console.warn(`CORS blocked origin: ${origin}`);
+            callback(
+              new Error(
+                `Not allowed by CORS. Allowed origins: ${allAllowedOrigins.join(', ')}`,
+              ),
+            );
+          }
+        },
         credentials: true,
       }
     : {
@@ -23,7 +66,11 @@ async function bootstrap() {
       };
 
   console.log(
-    `CORS Configuration: ${isProduction ? 'Production' : 'Development'} mode - ${isProduction ? 'Restricted origins' : 'All origins allowed'}`,
+    `CORS Configuration: ${isProduction ? 'Production' : 'Development'} mode - ${
+      isProduction
+        ? `Restricted origins: ${process.env.CORS_ORIGINS || 'default'}`
+        : 'All origins allowed'
+    }`,
   );
 
   app.enableCors({
@@ -34,8 +81,14 @@ async function bootstrap() {
       'Authorization',
       'Accept',
       'X-Requested-With',
+      'Origin',
+      'X-Requested-With',
+      'Access-Control-Allow-Origin',
+      'Access-Control-Allow-Headers',
     ],
     exposedHeaders: ['Authorization'],
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
   });
 
   // Enable global validation pipe
