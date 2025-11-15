@@ -37,9 +37,9 @@ import {
 } from '../users/dto/transaction-types.enum';
 import { Transaction } from '../entities/transaction.entity';
 import { ESimPurchase } from '../entities/esim-purchase.entity';
-import type { InvoiceRequest } from './dto/invoice.request.dto';
 import { QpayConnectionService } from './services/qpay.connection.service';
 import type { TopupEsim } from './dto/esimtopup.resquest.dto';
+import type { InvoiceRequest } from './dto/invoice.request.dto';
 
 @ApiTags('transactions')
 @Controller('transactions')
@@ -562,9 +562,10 @@ export class TransactionsController {
     description: 'User or wallet not found',
   })
   async createInvoice(
-     @Request() req: InvoiceRequest,
+    @Request() req: AuthRequest,
+    @Body() body: InvoiceRequest,
   ): Promise<any> {
-    return await this.qpayConnectionService.createInvoice(req);
+    return await this.qpayConnectionService.createInvoice(body);
   }
 
   @Post('check/:invoiceId')

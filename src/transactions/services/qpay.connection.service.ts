@@ -4,8 +4,9 @@ import { firstValueFrom } from "rxjs";
 import { ApiDataObject } from "src/inquiry/dto/data-package.dto";
 import { TokenResponse } from "../dto/token.response.dto";
 import { TopupEsim } from "../dto/esimtopup.resquest.dto";
+import { InvoiceRequest } from "../dto/invoice.request.dto";
 
-interface InvoiceRequest {
+interface InvoiceQpayRequest {
   invoice_code: string;
   sender_invoice_no: string;
   invoice_receiver_code: string;
@@ -62,9 +63,9 @@ export class QpayConnectionService {
     private readonly qpayBaseUrl = process.env.QPAY_API_URL;
     private readonly qpayUser = process.env.QPAY_API_USER;
     private readonly qpaySecret = process.env.QPAY_API_SECRET;
-    private readonly qpayInvoiceCode = process.env.QPAY_INVOICE_CODE;
     private readonly apiBaseUrl = 'https://api.esimaccess.com/api/v1';
     private readonly accessCode = process.env.ESIM_ACCESS_CODE;
+    private readonly qpayInvoiceCode = process.env.QPAY_INVOICE_CODE;
 
     constructor(
         private readonly httpService: HttpService
@@ -107,8 +108,7 @@ export class QpayConnectionService {
 
     async createInvoice(invoiceData: InvoiceRequest): Promise<InvoiceResponse> {
         try {
-            this.logger.log(`Creating invoice: ${invoiceData.invoice_code}`);
-            invoiceData = InvoiceBuilder(invoiceData);
+            const invoiceQpayData = InvoiceBuilder(invoiceData, this.qpayInvoiceCode!);
             // Get bearer token
             const token = await this.getToken();
             this.logger.log(`Using access token: ${token.access_token}`);
@@ -119,7 +119,7 @@ export class QpayConnectionService {
             const response: any = await firstValueFrom(
                 this.httpService.post<InvoiceResponse>(
                     invoiceUrl,
-                    invoiceData,
+                    invoiceQpayData,
                     {
                         headers: {
                             'Authorization': `Bearer ${token.access_token}`,
@@ -229,9 +229,9 @@ export class QpayConnectionService {
   }
 }
 
-function InvoiceBuilder(invoiceData: InvoiceRequest): InvoiceRequest {
+function InvoiceBuilder(invoiceData: InvoiceRequest, invoiceCode: string): InvoiceQpayRequest {
     return {
-        invoice_code: this.qpayInvoiceCode,
+        invoice_code: invoiceCode,
         sender_invoice_no:  `GOY_SIM-${Date.now()}`,  // baiguullagaas uusgeh dahin dawtagdashgui dugaar
         invoice_receiver_code: 'GOY_SIM',
         sender_branch_code: 'BRANCH001',
@@ -241,13 +241,13 @@ function InvoiceBuilder(invoiceData: InvoiceRequest): InvoiceRequest {
         minimum_amount:  null,
         allow_exceed:  false,
         maximum_amount:  null,
-        amount: 100,
+        amount: invoiceData.amount,
         callback_url: '',
         sender_staff_code: 'online',
         sender_terminal_code:  null,
         sender_terminal_data:  { name: null },
         allow_subscribe: false,
-        note: null,
+        note: 'Багцын нэр: '+invoiceData.packageCode+', Багцын үнэ: ' + invoiceData.amount + 'Худалдан авагчийн мэдээлэл: ' +invoiceData.email + ', ' + invoiceData.phone,
         invoice_receiver_data:  {
             register: 'AYU90031965',
             name: 'JAVKHLANTUGS BAATARSUKH',
