@@ -31,6 +31,8 @@ import {
 import { QueryTransactionsDto } from './dto/query-transactions.dto';
 import { PurchaseEsimDto } from './dto/purchase-esim.dto';
 import { ESimPurchaseResponseDto } from './dto/esim-purchase-response.dto';
+import { OrderEsimDto } from './dto/order-esim.dto';
+import { OrderEsimResponseDto } from './dto/order-esim-response.dto';
 import {
   TransactionStatus,
   TransactionType,
@@ -366,6 +368,57 @@ export class TransactionsController {
       expiresAt: purchase.expiresAt,
       purchasedAt: purchase.createdAt,
     };
+  }
+
+  /**
+   * POST /transactions/order-esim
+   *
+   * Order eSIM profiles from eSIM Access API
+   * Deducts balance from user's wallet and places order with eSIM provider
+   *
+   * @example Request:
+   * POST /transactions/order-esim
+   * Body: {
+   *   "transactionId": "TXN-20240101-ABC123",
+   *   "amount": 15000,
+   *   "packageInfoList": [{
+   *     "packageCode": "7aa948d363",
+   *     "count": 1,
+   *     "price": 15000
+   *   }]
+   * }
+   */
+  @Post('order-esim')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Order eSIM profiles',
+    description:
+      "Orders eSIM profiles from eSIM Access API, deducts balance from user's wallet, and creates transaction record. Throws error if balance is insufficient or order fails.",
+  })
+  @ApiBody({ type: OrderEsimDto })
+  @ApiResponse({
+    status: 201,
+    description: 'eSIM order placed successfully',
+    type: OrderEsimResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Invalid input data, insufficient balance, duplicate transaction ID, or order failed',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User or wallet not found',
+  })
+  async orderEsim(
+    @Request() req: AuthRequest,
+    @Body(ValidationPipe) orderEsimDto: OrderEsimDto,
+  ): Promise<OrderEsimResponseDto> {
+    return await this.transactionsService.orderEsim(req.user.id, orderEsimDto);
   }
 
   /**
