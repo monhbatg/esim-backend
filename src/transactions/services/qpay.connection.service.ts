@@ -167,8 +167,11 @@ export class QpayConnectionService {
         )
       );
 
-      this.logger.log(`Invoice status retrieved. invoice_id: ${invoiceId}, status: ${response.data.status}`);
-      return response.data;
+      this.logger.log(`Invoice status retrieved. invoice_id: ${invoiceId}`);
+      if(response.data.paid_amount)
+        return response.data.rows[0];
+      else
+        throw new BadRequestException('Төлбөр хийгдээгүй байна.');
     } catch (error) {
       this.logger.error(`Error checking invoice: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
