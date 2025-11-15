@@ -8,7 +8,10 @@ import {
 } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { TransactionType, TransactionStatus } from '../../users/dto/transaction-types.enum';
+import {
+  TransactionType,
+  TransactionStatus,
+} from '../../users/dto/transaction-types.enum';
 
 /**
  * DTO for querying transactions with filters and pagination
@@ -74,4 +77,3 @@ export class QueryTransactionsDto {
   @Max(100)
   limit?: number = 10;
 }
-

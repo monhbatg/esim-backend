@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
 import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
@@ -289,9 +289,8 @@ export class InquiryPackagesService {
    */
   private getErrorMessage(error: unknown): string {
     if (error instanceof AxiosError) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
       const data: any = error.response?.data;
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+
       if (data?.message && typeof data.message === 'string') {
         return data.message;
       }

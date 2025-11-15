@@ -1,16 +1,10 @@
-import {
-  IsNumber,
-  IsPositive,
-  Min,
-  Max,
-  IsNotEmpty,
-} from 'class-validator';
+import { IsNumber, IsPositive, Min, Max, IsNotEmpty } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
 /**
  * DTO for adding balance to a user's wallet
- * 
+ *
  * @example
  * {
  *   "amount": 100.50
@@ -34,4 +28,3 @@ export class AddBalanceDto {
   @Max(1000000, { message: 'Amount cannot exceed 1,000,000' })
   amount: number;
 }
-

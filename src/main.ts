@@ -8,7 +8,7 @@ async function bootstrap() {
 
   // Enable CORS
   const isProduction = process.env.NODE_ENV === 'production';
-  
+
   // In development, allow all origins. In production, use CORS_ORIGINS env var
   const corsOptions = isProduction
     ? {

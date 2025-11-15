@@ -24,12 +24,9 @@ export class WalletOwnershipGuard implements CanActivate {
 
     // Check if user is trying to access their own wallet
     if (userId !== authenticatedUserId) {
-      throw new ForbiddenException(
-        'You can only access your own wallet',
-      );
+      throw new ForbiddenException('You can only access your own wallet');
     }
 
     return true;
   }
 }
-

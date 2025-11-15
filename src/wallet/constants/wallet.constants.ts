@@ -9,12 +9,11 @@ export const WALLET_CONSTANTS = {
   /** Maximum amount per transaction */
   MAX_AMOUNT: 100_000,
   /** Default currency */
-  DEFAULT_CURRENCY: 'USD',
+  DEFAULT_CURRENCY: 'MNT',
   /** Supported currencies */
-  SUPPORTED_CURRENCIES: ['USD', 'EUR', 'GBP', 'JPY', 'CNY'],
+  SUPPORTED_CURRENCIES: ['MNT'],
   /** Retry attempts for optimistic locking conflicts */
   MAX_RETRY_ATTEMPTS: 3,
   /** Retry delay in milliseconds */
   RETRY_DELAY_MS: 100,
 } as const;
-

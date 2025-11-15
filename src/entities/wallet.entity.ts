@@ -58,4 +58,3 @@ export class Wallet {
   @Column({ type: 'timestamp', nullable: true })
   lastTransactionAt: Date | null;
 }
-

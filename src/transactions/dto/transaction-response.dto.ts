@@ -1,5 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { TransactionType, TransactionStatus } from '../../users/dto/transaction-types.enum';
+import {
+  TransactionType,
+  TransactionStatus,
+} from '../../users/dto/transaction-types.enum';
 import { ESimInfoDto } from './esim-info.dto';
 
 /**
@@ -130,7 +133,8 @@ export class TransactionResponseDto {
 
   @ApiPropertyOptional({
     type: ESimInfoDto,
-    description: 'eSIM purchase information (if this transaction is for eSIM purchase)',
+    description:
+      'eSIM purchase information (if this transaction is for eSIM purchase)',
     nullable: true,
   })
   esimInfo?: ESimInfoDto | null;
@@ -170,4 +174,3 @@ export class TransactionListResponseDto {
   })
   totalPages: number;
 }
-

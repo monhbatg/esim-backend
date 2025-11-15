@@ -5,8 +5,10 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Param,
   Patch,
   Put,
+  Query,
   Request,
   UseGuards,
   ValidationPipe,
@@ -15,10 +17,13 @@ import {
   ApiBearerAuth,
   ApiBody,
   ApiOperation,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import type { AuthRequest } from '../auth/interfaces/auth-request.interface';
 import { UsersService } from './users.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -31,6 +36,9 @@ import {
   UserProfileResponseDto,
   UserStatsResponseDto,
 } from './dto/user-response.dto';
+import { UpdateRoleDto } from './dto/update-role.dto';
+import { UserRole } from './dto/user-role.enum';
+import { User } from '../entities/user.entity';
 
 @ApiTags('users')
 @Controller('users')
@@ -278,5 +286,123 @@ export class UsersController {
   ): Promise<{ message: string }> {
     await this.usersService.deleteAccount(req.user.id);
     return { message: 'Account deleted successfully' };
+  }
+
+  // Admin-only endpoints
+  @Patch('admin/:userId/role')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Update user role (Admin only)',
+    description: 'Change a user role. Only admins can perform this action.',
+  })
+  @ApiBody({ type: UpdateRoleDto })
+  @ApiResponse({
+    status: 200,
+    description: 'User role updated successfully',
+    type: UserProfileResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid input data',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async updateUserRole(
+    @Param('userId') userId: string,
+    @Body(ValidationPipe) updateRoleDto: UpdateRoleDto,
+  ): Promise<UserProfileResponseDto> {
+    const user: User = await this.usersService.updateRole(
+      userId,
+      updateRoleDto,
+    );
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password: _password, ...profile } = user;
+    return profile as UserProfileResponseDto;
+  }
+
+  @Get('admin/all')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Get all users (Admin only)',
+    description: 'Retrieve a list of all users. Only admins can access this.',
+  })
+  @ApiQuery({
+    name: 'role',
+    required: false,
+    enum: UserRole,
+    description: 'Filter users by role',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Users retrieved successfully',
+    type: [UserProfileResponseDto],
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  async getAllUsers(
+    @Query('role') role?: UserRole,
+  ): Promise<UserProfileResponseDto[]> {
+    const users: User[] = role
+      ? await this.usersService.getUsersByRole(role)
+      : await this.usersService.getAllUsers();
+
+    return users.map((user: User) => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { password: _password, ...profile } = user;
+      return profile as UserProfileResponseDto;
+    });
+  }
+
+  @Get('admin/:userId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPPORT)
+  @ApiOperation({
+    summary: 'Get user by ID (Admin/Support only)',
+    description:
+      'Retrieve a specific user profile by ID. Admins and support staff can access this.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User profile retrieved successfully',
+    type: UserProfileResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin or Support access required',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async getUserById(
+    @Param('userId') userId: string,
+  ): Promise<UserProfileResponseDto> {
+    const user = await this.usersService.findById(userId);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password: _password, ...profile } = user;
+    return profile as UserProfileResponseDto;
   }
 }

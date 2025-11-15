@@ -12,6 +12,8 @@ import { SignUpDto } from '../auth/dto/signup.dto';
 import { UpdateUserPreferencesDto } from './dto/user-preferences.dto';
 import { UpdatePasswordDto } from './dto/update-password.dto';
 import { UserStatsResponseDto } from './dto/user-response.dto';
+import { UpdateRoleDto } from './dto/update-role.dto';
+import { UserRole } from './dto/user-role.enum';
 
 @Injectable()
 export class UsersService {
@@ -234,5 +236,27 @@ export class UsersService {
     // Optionally, you could also delete the user record:
     // const user = await this.findById(id);
     // await this.userRepository.remove(user);
+  }
+
+  async updateRole(
+    userId: string,
+    updateRoleDto: UpdateRoleDto,
+  ): Promise<User> {
+    const user = await this.findById(userId);
+    user.role = updateRoleDto.role;
+    return await this.userRepository.save(user);
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return await this.userRepository.find({
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async getUsersByRole(role: UserRole): Promise<User[]> {
+    return await this.userRepository.find({
+      where: { role },
+      order: { createdAt: 'DESC' },
+    });
   }
 }

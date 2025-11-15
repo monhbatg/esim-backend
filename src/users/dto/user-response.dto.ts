@@ -25,6 +25,13 @@ export class UserProfileResponseDto {
   isActive: boolean;
 
   @ApiProperty({
+    enum: ['USER', 'ADMIN', 'SUPPORT'],
+    example: 'USER',
+    description: 'User role',
+  })
+  role: string;
+
+  @ApiProperty({
     example: '2024-01-01T00:00:00.000Z',
     description: 'Last login timestamp',
     nullable: true,

@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   Post,
   Request,
   UseGuards,
@@ -18,7 +19,10 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import type { AuthRequest } from '../auth/interfaces/auth-request.interface';
+import { UserRole } from '../users/dto/user-role.enum';
 import { WalletService } from './wallet.service';
 import { AddBalanceDto } from '../users/dto/add-balance.dto';
 import {
@@ -26,6 +30,8 @@ import {
   AddBalanceResponseDto,
 } from '../users/dto/balance-response.dto';
 import { WalletOwnershipGuard } from './guards/wallet-ownership.guard';
+import { FreezeWalletDto } from './dto/freeze-wallet.dto';
+import { WalletStatusResponseDto } from './dto/wallet-status-response.dto';
 
 @ApiTags('wallet')
 @Controller('wallet')
@@ -146,9 +152,7 @@ export class WalletController {
     status: 404,
     description: 'User or wallet not found',
   })
-  async getBalance(
-    @Param('id') userId: string,
-  ): Promise<BalanceResponseDto> {
+  async getBalance(@Param('id') userId: string): Promise<BalanceResponseDto> {
     const { balance, currency } =
       await this.walletService.getBalanceWithCurrency(userId);
 
@@ -184,5 +188,140 @@ export class WalletController {
       currency,
     };
   }
-}
 
+  /**
+   * PATCH /wallet/admin/:userId/freeze
+   *
+   * Freeze a user's wallet (Admin only)
+   *
+   * @example Request:
+   * PATCH /wallet/admin/123e4567-e89b-12d3-a456-426614174000/freeze
+   * Body: { "reason": "Suspicious activity detected" }
+   *
+   * @example Response:
+   * {
+   *   "id": "wallet-uuid",
+   *   "userId": "123e4567-e89b-12d3-a456-426614174000",
+   *   "balance": 150.75,
+   *   "currency": "USD",
+   *   "isActive": true,
+   *   "isFrozen": true,
+   *   "frozenReason": "Suspicious activity detected",
+   *   "createdAt": "2024-01-01T00:00:00.000Z",
+   *   "updatedAt": "2024-01-01T00:00:00.000Z"
+   * }
+   */
+  @Patch('admin/:userId/freeze')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Freeze user wallet (Admin only)',
+    description:
+      'Freeze a user wallet to prevent transactions. Only admins can perform this action.',
+  })
+  @ApiBody({ type: FreezeWalletDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Wallet frozen successfully',
+    type: WalletStatusResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User or wallet not found',
+  })
+  async freezeWallet(
+    @Param('userId') userId: string,
+    @Body(ValidationPipe) freezeWalletDto: FreezeWalletDto,
+  ): Promise<WalletStatusResponseDto> {
+    const wallet = await this.walletService.freezeWallet(
+      userId,
+      freezeWalletDto.reason,
+    );
+
+    return {
+      id: wallet.id,
+      userId: wallet.userId,
+      balance: Number(wallet.balance),
+      currency: wallet.currency,
+      isActive: wallet.isActive,
+      isFrozen: wallet.isFrozen,
+      frozenReason: wallet.frozenReason,
+      createdAt: wallet.createdAt,
+      updatedAt: wallet.updatedAt,
+    };
+  }
+
+  /**
+   * PATCH /wallet/admin/:userId/unfreeze
+   *
+   * Unfreeze a user's wallet (Admin only)
+   *
+   * @example Request:
+   * PATCH /wallet/admin/123e4567-e89b-12d3-a456-426614174000/unfreeze
+   *
+   * @example Response:
+   * {
+   *   "id": "wallet-uuid",
+   *   "userId": "123e4567-e89b-12d3-a456-426614174000",
+   *   "balance": 150.75,
+   *   "currency": "USD",
+   *   "isActive": true,
+   *   "isFrozen": false,
+   *   "frozenReason": null,
+   *   "createdAt": "2024-01-01T00:00:00.000Z",
+   *   "updatedAt": "2024-01-01T00:00:00.000Z"
+   * }
+   */
+  @Patch('admin/:userId/unfreeze')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Unfreeze user wallet (Admin only)',
+    description:
+      'Unfreeze a user wallet to allow transactions again. Only admins can perform this action.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Wallet unfrozen successfully',
+    type: WalletStatusResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User or wallet not found',
+  })
+  async unfreezeWallet(
+    @Param('userId') userId: string,
+  ): Promise<WalletStatusResponseDto> {
+    const wallet = await this.walletService.unfreezeWallet(userId);
+
+    return {
+      id: wallet.id,
+      userId: wallet.userId,
+      balance: Number(wallet.balance),
+      currency: wallet.currency,
+      isActive: wallet.isActive,
+      isFrozen: wallet.isFrozen,
+      frozenReason: wallet.frozenReason,
+      createdAt: wallet.createdAt,
+      updatedAt: wallet.updatedAt,
+    };
+  }
+}

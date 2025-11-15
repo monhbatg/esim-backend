@@ -16,4 +16,3 @@ import { AuthModule } from '../auth/auth.module';
   exports: [WalletService], // Export for use in TransactionModule later
 })
 export class WalletModule {}
-

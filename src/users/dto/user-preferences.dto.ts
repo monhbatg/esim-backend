@@ -12,13 +12,27 @@ export class UpdateUserPreferencesDto {
   @ApiPropertyOptional({
     example: 'USD',
     description: 'Preferred currency code (ISO 4217)',
-    enum: ['USD', 'EUR', 'GBP', 'JPY', 'CNY', 'AUD', 'CAD', 'CHF', 'INR', 'SGD'],
+    enum: [
+      'USD',
+      'EUR',
+      'GBP',
+      'JPY',
+      'CNY',
+      'AUD',
+      'CAD',
+      'CHF',
+      'INR',
+      'SGD',
+    ],
   })
   @IsOptional()
   @IsString()
-  @IsIn(['USD', 'EUR', 'GBP', 'JPY', 'CNY', 'AUD', 'CAD', 'CHF', 'INR', 'SGD'], {
-    message: 'Invalid currency code',
-  })
+  @IsIn(
+    ['USD', 'EUR', 'GBP', 'JPY', 'CNY', 'AUD', 'CAD', 'CHF', 'INR', 'SGD'],
+    {
+      message: 'Invalid currency code',
+    },
+  )
   preferredCurrency?: string;
 
   @ApiPropertyOptional({
@@ -87,4 +101,3 @@ export class UserPreferencesDto {
   favoriteCountries: string[];
   timezone: string;
 }
-

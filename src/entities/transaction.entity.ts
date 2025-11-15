@@ -10,7 +10,10 @@ import {
 } from 'typeorm';
 import { User } from './user.entity';
 import { Wallet } from './wallet.entity';
-import { TransactionType, TransactionStatus } from '../users/dto/transaction-types.enum';
+import {
+  TransactionType,
+  TransactionStatus,
+} from '../users/dto/transaction-types.enum';
 
 /**
  * Transaction entity for tracking all wallet transactions
@@ -101,4 +104,3 @@ export class Transaction {
   @Column({ type: 'timestamp', nullable: true })
   completedAt: Date | null; // When transaction was completed
 }
-

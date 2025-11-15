@@ -26,7 +26,11 @@ export class AuthService {
       const user = await this.usersService.create(signUpDto);
 
       // Generate JWT token
-      const payload = { sub: user.id, email: user.email };
+      const payload = {
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+      };
       const accessToken = this.jwtService.sign(payload);
 
       // Update last login
@@ -73,7 +77,11 @@ export class AuthService {
     }
 
     // Generate JWT token
-    const payload = { sub: user.id, email: user.email };
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    };
     const accessToken = this.jwtService.sign(payload);
 
     // Update last login
@@ -110,7 +118,11 @@ export class AuthService {
       throw new UnauthorizedException('User not found or inactive');
     }
 
-    const payload = { sub: user.id, email: user.email };
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    };
     const accessToken = this.jwtService.sign(payload);
 
     return {

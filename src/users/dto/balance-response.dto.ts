@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 
 /**
  * Response DTO for balance operations
- * 
+ *
  * @example
  * {
  *   "userId": "123e4567-e89b-12d3-a456-426614174000",
@@ -32,7 +32,7 @@ export class BalanceResponseDto {
 
 /**
  * Response DTO for add balance operation
- * 
+ *
  * @example
  * {
  *   "userId": "123e4567-e89b-12d3-a456-426614174000",
@@ -55,4 +55,3 @@ export class AddBalanceResponseDto extends BalanceResponseDto {
   })
   amountAdded: number;
 }
-

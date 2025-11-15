@@ -80,4 +80,3 @@ export class CreateTransactionDto {
   @IsOptional()
   metadata?: Record<string, any>;
 }
-

@@ -341,7 +341,11 @@ export class WalletService {
     const wallet = await this.getWallet(userId);
     wallet.isFrozen = true;
     wallet.frozenReason = reason || null;
-    return await this.walletRepository.save(wallet);
+    const updated = await this.walletRepository.save(wallet);
+    this.logger.log(
+      `Wallet frozen for user ${userId}${reason ? ` - Reason: ${reason}` : ''}`,
+    );
+    return updated;
   }
 
   /**
