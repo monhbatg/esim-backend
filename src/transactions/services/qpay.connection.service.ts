@@ -1,10 +1,15 @@
 import { HttpService } from "@nestjs/axios";
-import { Injectable, Logger, BadRequestException } from "@nestjs/common";
+import { Injectable, Logger, BadRequestException, HttpException, HttpStatus } from "@nestjs/common";
 import { firstValueFrom } from "rxjs";
 import { ApiDataObject } from "src/inquiry/dto/data-package.dto";
 import { TokenResponse } from "../dto/token.response.dto";
 import { TopupEsim } from "../dto/esimtopup.resquest.dto";
 import { InvoiceRequest } from "../dto/invoice.request.dto";
+import { EsimItem } from "../dto/esim.package.response.dto";
+import { esimOrderResponse } from "../dto/esim.order.response.dto";
+import { DataPackageEntity } from "src/entities/data-packages.entity";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
 
 interface InvoiceQpayRequest {
   invoice_code: string;
@@ -68,7 +73,9 @@ export class QpayConnectionService {
     private readonly qpayInvoiceCode = process.env.QPAY_INVOICE_CODE;
 
     constructor(
-        private readonly httpService: HttpService
+      private readonly httpService: HttpService,
+      @InjectRepository(DataPackageEntity)
+      private readonly dataPackageRepo: Repository<DataPackageEntity>,
     ) {
       // Validate env vars on service creation
       if (!this.qpayUser || !this.qpaySecret) {
@@ -108,14 +115,12 @@ export class QpayConnectionService {
 
     async createInvoice(invoiceData: InvoiceRequest): Promise<InvoiceResponse> {
         try {
-            const invoiceQpayData = InvoiceBuilder(invoiceData, this.qpayInvoiceCode!);
-            // Get bearer token
-            const token = await this.getToken();
-            this.logger.log(`Using access token: ${token.access_token}`);
-
             // Construct invoice endpoint (adjust URL path if needed)
             const invoiceUrl = `${this.qpayBaseUrl}/invoice`;
-            
+            const token = await this.getToken();
+            this.logger.log(`Using access token: ${token.access_token}`); // dahin dahin shine token uusgeh u ? neg duudsangaa DB deer hadgalaad awahu 
+
+            const invoiceQpayData = InvoiceBuilder(invoiceData, this.qpayInvoiceCode!);
             const response: any = await firstValueFrom(
                 this.httpService.post<InvoiceResponse>(
                     invoiceUrl,
@@ -128,7 +133,6 @@ export class QpayConnectionService {
                     }
                 )
             );
-
             this.logger.log(`Invoice created successfully. invoice_id: ${response.data.invoice_id}`);
             return response.data;
         } catch (error) {
@@ -137,14 +141,10 @@ export class QpayConnectionService {
         }
     }
 
-    async checkInvoice(invoiceId: string): Promise<any> {
+    async checkInvoice(invoiceId: string, packageCode: string, count: number): Promise<any> {
     try {
-      this.logger.log(`Checking invoice status: ${invoiceId}`);
-
-      // Get bearer token
+      this.logger.log(`Checking invoice process: ${invoiceId}`);
       const token = await this.getToken();
-
-      // Construct check invoice endpoint
       const checkUrl = `${this.qpayBaseUrl}/payment/check`;
       
       const response: any = await firstValueFrom(
@@ -166,10 +166,27 @@ export class QpayConnectionService {
           }
         )
       );
-
       this.logger.log(`Invoice status retrieved. invoice_id: ${invoiceId}`);
-      if(response.data.paid_amount)
-        return response.data.rows[0];
+
+      if(response.data.paid_amount){
+        const packages = await this.dataPackageRepo.find({});
+        const currentPackage = packages.find(pkg => pkg.packageCode === packageCode);
+        if (!currentPackage) {
+          throw new BadRequestException('Invalid package code.');
+        }
+
+        const orderEsim = await this.orderEsimWeb(packageCode, currentPackage.price*count,count);
+        this.logger.log(`eSIM ordered. orderNo: ${orderEsim.obj.orderNo}, orderAmount: ${currentPackage.price}`);
+
+
+        const myEsimResponse: any = await this.getMyEsimPackages(5, 100);
+        this.logger.log(`Retrieved my eSIM packages to find the ordered eSIM. + ${myEsimResponse}`);
+        const found = myEsimResponse?.obj?.esimList?.find(
+        (esim: EsimItem) =>
+          esim.orderNo === orderEsim.obj.orderNo
+        );
+        return found;
+      }
       else
         throw new BadRequestException('Төлбөр хийгдээгүй байна.');
     } catch (error) {
@@ -178,20 +195,72 @@ export class QpayConnectionService {
     }
   }
 
-  async orderEsim() {
+  async getMyEsimPackages(page: number , limit: number): Promise<any[]> {
+    try {
+      const url = `${this.apiBaseUrl}/open/esim/query`;
+      this.logger.log(`Fetching data packages from: ${url} , MY eSIM menu`);
+      const response: any = await firstValueFrom(
+        this.httpService.post<ApiResponse>(
+          url,
+          {
+            orderNo: '',
+            esimTranNo:'',
+            iccid: '',
+            pager: 
+              { pageNum: page,
+                pageSize: limit 
+              }
+          },
+          {
+            headers: {
+              'RT-AccessCode': this.accessCode,
+              'Content-Type': 'application/json',
+            },
+            timeout: 10000,
+          },
+        ),
+      );
+      this.logger.log(`Data packages fetched successfully from My eSIM menu`);
+      return response.data;
+    } catch (error) {
+      this.handleError(error, 'Failed to get My eSIM packages');
+    }
+  }
+
+  private handleError(error: unknown, message: string): never {
+    const errorMessage = this.getErrorMessage(error);
+    this.logger.error(
+      `${message}: ${errorMessage}`,
+      error instanceof Error ? error.stack : undefined,
+    );
+
+    throw new HttpException(
+      {
+        success: false,
+        message: message,
+        error: errorMessage,
+      },
+      HttpStatus.INTERNAL_SERVER_ERROR,
+    );
+  }
+    getErrorMessage(error: unknown) {
+        throw new Error("Method not implemented.");
+    }
+
+  async orderEsimWeb(packageCode: string, amount: number, count: number): Promise<esimOrderResponse> {
     const url = `${this.apiBaseUrl}/open/esim/order`;
-      this.logger.log(`Fetching data packages from: ${url}`);
+      this.logger.log(`eSIM order processing ============>: ${url}`);
       const response: any = await firstValueFrom(
           this.httpService.post<ApiResponse>(
               url,
               {
-                transactionId: `GOY_SIM-2025111511`,
-                amount: 17000,
+                transactionId: `GOY_SIM-${Date.now()}`,
+                amount: amount,
                 packageInfoList: [
                   {
-                    packageCode: 'JC053',
-                    count: 1,
-                    price: 17000
+                    packageCode: packageCode,
+                    count: count,
+                    price: amount
                   }
                 ]
               },
@@ -203,8 +272,7 @@ export class QpayConnectionService {
               }
           )
       );
-      const data: ApiResponse = response.data;
-      return data;
+      return response.data;
   }
 
   async topupEsim(body: TopupEsim): Promise<ApiResponse> {
@@ -259,3 +327,4 @@ function InvoiceBuilder(invoiceData: InvoiceRequest, invoiceCode: string): Invoi
         }
     };
 }
+

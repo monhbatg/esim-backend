@@ -568,11 +568,11 @@ export class TransactionsController {
     return await this.qpayConnectionService.createInvoice(body);
   }
 
-  @Post('check/:invoiceId')
+  @Post('check/:invoiceId/:packageCode/:count')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Check QPay invoice status',
-    description: 'Нэхэмжлэл төлөгдсөн эсэхийг шалгах',
+    description: 'Нэхэмжлэл төлөгдсөн эсэхийг шалгах, нэхэмжллийн дугаар, багцын код, тоо ширхэгийг дамжуулнэ',
   })
   @ApiResponse({
     status: 200,
@@ -593,36 +593,10 @@ export class TransactionsController {
   async checkInvoiceStatus(
     @Request() req: AuthRequest,
     @Param('invoiceId') invoiceId: string,
+    @Param('packageCode') packageCode: string,
+    @Param('count') count: number,
   ): Promise<any> {
-    return await this.qpayConnectionService.checkInvoice(invoiceId);
-  }
-
-  @Post('order/esim')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Check QPay invoice status',
-    description: 'Нэхэмжлэл төлөгдсөн эсэхийг шалгах',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Invoice status retrieved successfully',
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Invalid invoice ID',
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing token',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Invoice not found',
-  })
-  async orderEsim(
-    @Request() req: AuthRequest,
-  ): Promise<any> {
-    return await this.qpayConnectionService.orderEsim();
+    return await this.qpayConnectionService.checkInvoice(invoiceId, packageCode, count);
   }
 
   @Post('esim/topup')

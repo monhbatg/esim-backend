@@ -8,11 +8,12 @@ import { WalletModule } from '../wallet/wallet.module';
 import { AuthModule } from '../auth/auth.module';
 import { QpayConnectionService } from './services/qpay.connection.service';
 import { HttpModule } from '@nestjs/axios';
+import { DataPackageEntity } from 'src/entities/data-packages.entity';
 
 @Module({
   imports: [
     HttpModule,
-    TypeOrmModule.forFeature([Transaction, ESimPurchase]),
+    TypeOrmModule.forFeature([Transaction, ESimPurchase,DataPackageEntity]),
     WalletModule, // Import WalletModule to use WalletService
     forwardRef(() => AuthModule), // Import AuthModule to access TokenBlacklistService for JwtAuthGuard
   ],
