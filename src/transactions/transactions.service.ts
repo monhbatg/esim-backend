@@ -1,25 +1,36 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   Injectable,
   NotFoundException,
   BadRequestException,
   Logger,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In } from 'typeorm';
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs';
+import { AxiosError } from 'axios';
 import { Transaction } from '../entities/transaction.entity';
 import { ESimPurchase } from '../entities/esim-purchase.entity';
 import { WalletService } from '../wallet/wallet.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { PurchaseEsimDto } from './dto/purchase-esim.dto';
 import { QueryTransactionsDto } from './dto/query-transactions.dto';
+import { OrderEsimDto } from './dto/order-esim.dto';
 import {
   TransactionType,
   TransactionStatus,
 } from '../users/dto/transaction-types.enum';
+import { CURRENCY_CONSTANTS } from '../marketplace/constants/currency.constants';
 
 @Injectable()
 export class TransactionsService {
   private readonly logger = new Logger(TransactionsService.name);
+
+  private readonly apiBaseUrl = 'https://api.esimaccess.com/api/v1';
+  private readonly accessCode = process.env.ESIM_ACCESS_CODE;
 
   constructor(
     @InjectRepository(Transaction)
@@ -28,6 +39,7 @@ export class TransactionsService {
     private readonly esimPurchaseRepository: Repository<ESimPurchase>,
     private readonly walletService: WalletService,
     private readonly dataSource: DataSource,
+    private readonly httpService: HttpService,
   ) {}
 
   /**
@@ -509,5 +521,312 @@ export class TransactionsService {
     }
 
     return expirationDate;
+  }
+
+  /**
+   * Order eSIM profiles from eSIM Access API
+   * Deducts balance from user's wallet and places order with eSIM provider
+   * @param userId - The ID of the user ordering the eSIM
+   * @param orderEsimDto - Order details including packages and amount
+   * @returns Order response with orderNo and transaction details
+   * @throws BadRequestException if balance is insufficient or order fails
+   */
+  async orderEsim(
+    userId: string,
+    orderEsimDto: OrderEsimDto,
+  ): Promise<{
+    orderNo: string;
+    transactionId: string;
+    amount: number;
+    transactionStatus: string;
+    balanceBefore: number;
+    balanceAfter: number;
+  }> {
+    // Validate access code is configured
+    if (!this.accessCode) {
+      this.logger.error('ESIM_ACCESS_CODE is not configured');
+      throw new BadRequestException('eSIM service is not properly configured');
+    }
+
+    // Generate transaction ID if not provided
+    let transactionId = orderEsimDto.transactionId;
+    if (!transactionId) {
+      transactionId = this.generateTransactionId();
+      // Ensure uniqueness (retry if collision - extremely rare)
+      let attempts = 0;
+      while (
+        (await this.transactionRepository.findOne({
+          where: { transactionId },
+        })) &&
+        attempts < 10
+      ) {
+        transactionId = this.generateTransactionId();
+        attempts++;
+      }
+    } else {
+      // Check if provided transaction ID already exists (duplicate check)
+      const existingTransaction = await this.transactionRepository.findOne({
+        where: { transactionId },
+      });
+
+      if (existingTransaction) {
+        throw new BadRequestException(
+          `Transaction ID ${transactionId} already exists. Please use a unique transaction ID.`,
+        );
+      }
+    }
+
+    // Get wallet balance (always in MNT)
+    const { balance: currentBalance } =
+      await this.walletService.getBalanceWithCurrency(userId);
+
+    // Convert amount from API format to MNT
+    // API format: amount is in units where 10000 = $1.00
+    // Conversion: (amount / 10000) * 3600 = MNT amount
+    const usdAmount = orderEsimDto.amount / CURRENCY_CONSTANTS.PRICE_MULTIPLIER;
+    const amountInMnt = Math.round(
+      usdAmount * CURRENCY_CONSTANTS.USD_TO_MNT_RATE,
+    );
+
+    // Check if user has sufficient balance (in MNT)
+    if (Number(currentBalance) < amountInMnt) {
+      throw new BadRequestException(
+        `Insufficient balance. Current balance: ${Number(currentBalance).toFixed(2)} MNT, Required: ${amountInMnt.toFixed(2)} MNT`,
+      );
+    }
+
+    // Get wallet entity
+    const wallet = await this.walletService.getWallet(userId);
+
+    // Create and save transaction record with PENDING status first
+    // This ensures the transaction is saved even if API call hangs
+    // Save only MNT converted amount
+    const transaction = this.transactionRepository.create({
+      transactionId: transactionId,
+      userId,
+      walletId: wallet.id,
+      type: TransactionType.WITHDRAWAL,
+      status: TransactionStatus.PENDING,
+      amount: amountInMnt, // Save MNT converted amount
+      currency: CURRENCY_CONSTANTS.CURRENCY_CODE, // Always use MNT
+      balanceBefore: Number(currentBalance),
+      description: `eSIM Order: ${orderEsimDto.packageInfoList.map((p) => p.packageCode).join(', ')}`,
+      metadata: {
+        orderType: 'esim',
+        packageInfoList: orderEsimDto.packageInfoList,
+        originalAmount: orderEsimDto.amount, // Store original API amount for reference
+        convertedAmountMnt: amountInMnt, // Store converted MNT amount
+      },
+    });
+
+    const savedTransaction = await this.transactionRepository.save(transaction);
+    this.logger.log(
+      `Transaction created: ${transactionId} with PENDING status for user ${userId}`,
+    );
+
+    try {
+      // Prepare request body for eSIM Access API
+      const requestBody: any = {
+        transactionId: transactionId,
+        amount: orderEsimDto.amount,
+        packageInfoList: orderEsimDto.packageInfoList.map((pkg) => ({
+          packageCode: pkg.packageCode,
+          count: pkg.count,
+          price: pkg.price,
+        })),
+      };
+
+      // Call eSIM Access API to place order
+      const url = `${this.apiBaseUrl}/open/esim/order`;
+      this.logger.log(
+        `Placing eSIM order: ${transactionId} for user ${userId}`,
+      );
+
+      let orderResponse: any;
+      try {
+        const response = await firstValueFrom(
+          this.httpService.post(url, requestBody, {
+            headers: {
+              'RT-AccessCode': this.accessCode,
+              'Content-Type': 'application/json',
+            },
+            timeout: 30000, // 30 seconds timeout for order API
+          }),
+        );
+
+        orderResponse = response.data;
+        this.logger.log(
+          `eSIM order API response received for ${transactionId}`,
+        );
+      } catch (error) {
+        const axiosError = error as AxiosError;
+        this.logger.error(
+          `eSIM order API call failed: ${axiosError.message}`,
+          axiosError.stack,
+        );
+
+        // Extract error message from response if available
+        let errorMessage = 'Failed to place eSIM order';
+        if (axiosError.response?.data) {
+          const errorData = axiosError.response.data as any;
+          errorMessage =
+            errorData.errorMsg ||
+            errorData.message ||
+            `API Error: ${axiosError.response.status}`;
+        } else if (
+          axiosError.code === 'ECONNABORTED' ||
+          axiosError.message.includes('timeout')
+        ) {
+          errorMessage = 'eSIM provider API request timed out';
+        }
+
+        // Update transaction to FAILED status
+        await this.transactionRepository.update(
+          { transactionId },
+          {
+            status: TransactionStatus.FAILED,
+            failureReason: errorMessage,
+            balanceAfter: Number(currentBalance),
+            currency: CURRENCY_CONSTANTS.CURRENCY_CODE, // Ensure MNT currency
+          },
+        );
+
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.BAD_REQUEST,
+            message: errorMessage,
+            error: 'eSIM Order Failed',
+          },
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      // Validate API response
+      if (!orderResponse || !orderResponse.success) {
+        const errorMsg =
+          orderResponse?.errorMsg ||
+          'Order failed - invalid response from eSIM provider';
+        this.logger.error(
+          `eSIM order failed: ${errorMsg}`,
+          JSON.stringify(orderResponse),
+        );
+
+        // Update transaction to FAILED status
+        await this.transactionRepository.update(
+          { transactionId },
+          {
+            status: TransactionStatus.FAILED,
+            failureReason: errorMsg,
+            balanceAfter: Number(currentBalance),
+            currency: CURRENCY_CONSTANTS.CURRENCY_CODE, // Ensure MNT currency
+          },
+        );
+
+        throw new BadRequestException(errorMsg);
+      }
+
+      // Extract order number from response
+      const orderNo = orderResponse.obj?.orderNo || orderResponse.orderNo;
+      if (!orderNo) {
+        this.logger.error(
+          'Order response missing orderNo',
+          JSON.stringify(orderResponse),
+        );
+
+        // Update transaction to FAILED status
+        await this.transactionRepository.update(
+          { transactionId },
+          {
+            status: TransactionStatus.FAILED,
+            failureReason: 'Order response missing order number',
+            balanceAfter: Number(currentBalance),
+            currency: CURRENCY_CONSTANTS.CURRENCY_CODE, // Ensure MNT currency
+          },
+        );
+
+        throw new BadRequestException('Order response missing order number');
+      }
+
+      return await this.dataSource.transaction(async (manager) => {
+        const transactionRepository = manager.getRepository(Transaction);
+
+        const updatedWallet = await this.walletService.deductBalance(
+          userId,
+          amountInMnt,
+          {
+            transactionId: savedTransaction.transactionId,
+            description: `eSIM Order: ${orderNo}`,
+          },
+        );
+
+        const newBalance = Number(updatedWallet.balance);
+
+        // Update transaction with final status and order details
+        const transactionToUpdate = await transactionRepository.findOne({
+          where: { transactionId },
+        });
+
+        if (transactionToUpdate) {
+          transactionToUpdate.status = TransactionStatus.COMPLETED;
+          transactionToUpdate.balanceAfter = newBalance;
+          transactionToUpdate.completedAt = new Date();
+          transactionToUpdate.currency = CURRENCY_CONSTANTS.CURRENCY_CODE; // Ensure MNT currency
+          transactionToUpdate.metadata = {
+            orderType: 'esim',
+            packageInfoList: orderEsimDto.packageInfoList,
+            orderNo,
+            esimOrderResponse: orderResponse.obj || orderResponse,
+            originalAmount: orderEsimDto.amount, // Store original API amount for reference
+            convertedAmountMnt: amountInMnt, // Store converted MNT amount
+          };
+          transactionToUpdate.referenceId = orderNo;
+
+          await transactionRepository.save(transactionToUpdate);
+        }
+
+        this.logger.log(
+          `eSIM order successful: OrderNo=${orderNo}, TransactionId=${transactionId}, User=${userId}`,
+        );
+
+        return {
+          orderNo,
+          transactionId: transactionId,
+          amount: amountInMnt, // Return MNT converted amount
+          transactionStatus: TransactionStatus.COMPLETED,
+          balanceBefore: Number(currentBalance),
+          balanceAfter: newBalance,
+        };
+      });
+    } catch (error) {
+      // If error was already handled (transaction updated), re-throw it
+      // Otherwise, mark transaction as failed
+      const currentTransaction = await this.transactionRepository.findOne({
+        where: { transactionId },
+      });
+
+      if (
+        currentTransaction &&
+        currentTransaction.status === TransactionStatus.PENDING
+      ) {
+        // Update transaction to FAILED status if still PENDING
+        await this.transactionRepository.update(
+          { transactionId },
+          {
+            status: TransactionStatus.FAILED,
+            failureReason:
+              error instanceof Error ? error.message : 'Unknown error',
+            balanceAfter: Number(currentBalance),
+            currency: CURRENCY_CONSTANTS.CURRENCY_CODE, // Ensure MNT currency
+          },
+        );
+
+        this.logger.error(
+          `eSIM order failed: ${transactionId}, User: ${userId}, Error: ${error instanceof Error ? error.message : 'Unknown'}`,
+        );
+      }
+
+      // Re-throw the error so it can be handled by the controller
+      throw error;
+    }
   }
 }

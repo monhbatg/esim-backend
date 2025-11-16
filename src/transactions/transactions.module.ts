@@ -12,8 +12,8 @@ import { DataPackageEntity } from 'src/entities/data-packages.entity';
 
 @Module({
   imports: [
-    HttpModule,
-    TypeOrmModule.forFeature([Transaction, ESimPurchase,DataPackageEntity]),
+    TypeOrmModule.forFeature([Transaction, ESimPurchase, DataPackageEntity]),
+    HttpModule, // Import HttpModule for making API calls to eSIM Access
     WalletModule, // Import WalletModule to use WalletService
     forwardRef(() => AuthModule), // Import AuthModule to access TokenBlacklistService for JwtAuthGuard
   ],
