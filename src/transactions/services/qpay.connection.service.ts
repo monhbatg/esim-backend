@@ -10,6 +10,7 @@ import { esimOrderResponse } from "../dto/esim.order.response.dto";
 import { DataPackageEntity } from "src/entities/data-packages.entity";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
+import { CheckPaymentRequest } from "../dto/check.payment.request.dto";
 
 interface InvoiceQpayRequest {
   invoice_code: string;
@@ -141,9 +142,9 @@ export class QpayConnectionService {
         }
     }
 
-    async checkInvoice(invoiceId: string, packageCode: string, count: number): Promise<any> {
+    async checkInvoice(data: CheckPaymentRequest): Promise<any> {
     try {
-      this.logger.log(`Checking invoice process: ${invoiceId}`);
+      this.logger.log(`Checking invoice process: ${data.invoiceId}`);
       const token = await this.getToken();
       const checkUrl = `${this.qpayBaseUrl}/payment/check`;
       
@@ -152,7 +153,7 @@ export class QpayConnectionService {
           checkUrl,
           {
             object_type: 'INVOICE',
-            object_id: invoiceId,
+            object_id: data.invoiceId,
             offset: {
               "page_number": 1,
               "page_limit": 100
@@ -166,26 +167,41 @@ export class QpayConnectionService {
           }
         )
       );
-      this.logger.log(`Invoice status retrieved. invoice_id: ${invoiceId}`);
+      this.logger.log(`Invoice status retrieved. invoice_id: ${data.invoiceId}`);
 
       if(response.data.paid_amount){
         const packages = await this.dataPackageRepo.find({});
-        const currentPackage = packages.find(pkg => pkg.packageCode === packageCode);
-        if (!currentPackage) {
-          throw new BadRequestException('Invalid package code.');
+        const result = [];
+        for(const pkg of data.packages){
+          const packageCode = pkg.packageCode;
+          const count = pkg.quantity;
+
+          const currentPackage = packages.find(pkg => pkg.packageCode === packageCode);
+          if (!currentPackage) {
+            throw new BadRequestException('Invalid package code.');
+          }
+
+          const orderEsim = await this.orderEsimWeb(packageCode, currentPackage.price*count,count);
+          this.logger.log(`eSIM ordered. orderNo: ${orderEsim.obj.orderNo}, orderAmount: ${currentPackage.price}`);
+
+
+          const myEsimResponse: any = await this.getMyEsimPackages(5, 100);
+          this.logger.log(`Retrieved my eSIM packages to find the ordered eSIM. + ${myEsimResponse}`);
+          const found = myEsimResponse?.obj?.esimList?.find(
+          (esim: EsimItem) =>
+            esim.orderNo === orderEsim.obj.orderNo
+          );
+          if (found) {
+            this.logger.log(`eSIM found in my packages. ICCID: ${found.iccid}`);
+          }
+          result.push({
+            packageCode: packageCode,
+            orderNo: orderEsim.obj.orderNo,
+            iccid: found ? found.iccid : null,
+          });
         }
+        return result;
 
-        const orderEsim = await this.orderEsimWeb(packageCode, currentPackage.price*count,count);
-        this.logger.log(`eSIM ordered. orderNo: ${orderEsim.obj.orderNo}, orderAmount: ${currentPackage.price}`);
-
-
-        const myEsimResponse: any = await this.getMyEsimPackages(5, 100);
-        this.logger.log(`Retrieved my eSIM packages to find the ordered eSIM. + ${myEsimResponse}`);
-        const found = myEsimResponse?.obj?.esimList?.find(
-        (esim: EsimItem) =>
-          esim.orderNo === orderEsim.obj.orderNo
-        );
-        return found;
       }
       else
         throw new BadRequestException('Төлбөр хийгдээгүй байна.');
@@ -305,7 +321,7 @@ function InvoiceBuilder(invoiceData: InvoiceRequest, invoiceCode: string): Invoi
         invoice_code: invoiceCode,
         sender_invoice_no:  `GOY_SIM-${Date.now()}`,  // baiguullagaas uusgeh dahin dawtagdashgui dugaar
         invoice_receiver_code: 'GOY_SIM',
-        sender_branch_code: 'BRANCH001',
+        sender_branch_code: invoiceData.phone + ', ' + invoiceData.email,
         invoice_description: 'Default Invoice Description',
         enable_expiry: false,
         allow_partial: false,
@@ -318,7 +334,7 @@ function InvoiceBuilder(invoiceData: InvoiceRequest, invoiceCode: string): Invoi
         sender_terminal_code:  null,
         sender_terminal_data:  { name: null },
         allow_subscribe: false,
-        note: 'Багцын нэр: '+invoiceData.packageCode+', Багцын үнэ: ' + invoiceData.amount + 'Худалдан авагчийн мэдээлэл: ' +invoiceData.email + ', ' + invoiceData.phone,
+        note: 'Багцын нэр: '+invoiceData.packages.toString+', Багцын үнэ: ' + invoiceData.amount + 'Худалдан авагчийн мэдээлэл: ' +invoiceData.email + ', ' + invoiceData.phone,
         invoice_receiver_data:  {
             register: 'AYU90031965',
             name: 'JAVKHLANTUGS BAATARSUKH',

@@ -1,7 +1,5 @@
-export interface InvoiceRequest extends Request {
-    email: string;
-    phone: string;
-    amount: number;
+export interface CheckPaymentRequest extends Request {
+    invoiceId: string;
     packages: [
         {
             packageCode: string;

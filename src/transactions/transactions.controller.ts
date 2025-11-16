@@ -40,6 +40,7 @@ import { ESimPurchase } from '../entities/esim-purchase.entity';
 import { QpayConnectionService } from './services/qpay.connection.service';
 import type { TopupEsim } from './dto/esimtopup.resquest.dto';
 import type { InvoiceRequest } from './dto/invoice.request.dto';
+import type { CheckPaymentRequest } from './dto/check.payment.request.dto';
 
 @ApiTags('transactions')
 @Controller('transactions')
@@ -568,7 +569,7 @@ export class TransactionsController {
     return await this.qpayConnectionService.createInvoice(body);
   }
 
-  @Post('check/:invoiceId/:packageCode/:count')
+  @Post('check/payment')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Check QPay invoice status',
@@ -592,11 +593,9 @@ export class TransactionsController {
   })
   async checkInvoiceStatus(
     @Request() req: AuthRequest,
-    @Param('invoiceId') invoiceId: string,
-    @Param('packageCode') packageCode: string,
-    @Param('count') count: number,
+    @Body() data: CheckPaymentRequest
   ): Promise<any> {
-    return await this.qpayConnectionService.checkInvoice(invoiceId, packageCode, count);
+    return await this.qpayConnectionService.checkInvoice(data);
   }
 
   @Post('esim/topup')
