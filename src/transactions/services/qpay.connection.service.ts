@@ -171,7 +171,7 @@ export class QpayConnectionService {
 
       if(response.data.paid_amount){
         const packages = await this.dataPackageRepo.find({});
-        const result = [];
+        const result: any = [];
         for(const pkg of data.packages){
           const packageCode = pkg.packageCode;
           const count = pkg.quantity;
@@ -183,9 +183,8 @@ export class QpayConnectionService {
 
           const orderEsim = await this.orderEsimWeb(packageCode, currentPackage.price*count,count);
           this.logger.log(`eSIM ordered. orderNo: ${orderEsim.obj.orderNo}, orderAmount: ${currentPackage.price}`);
-
-
-          const myEsimResponse: any = await this.getMyEsimPackages(5, 100);
+          await delay(500);
+          const myEsimResponse: any = await this.getMyEsimPackages(1, 500);
           this.logger.log(`Retrieved my eSIM packages to find the ordered eSIM. + ${myEsimResponse}`);
           const found = myEsimResponse?.obj?.esimList?.find(
           (esim: EsimItem) =>
@@ -194,11 +193,7 @@ export class QpayConnectionService {
           if (found) {
             this.logger.log(`eSIM found in my packages. ICCID: ${found.iccid}`);
           }
-          result.push({
-            packageCode: packageCode,
-            orderNo: orderEsim.obj.orderNo,
-            iccid: found ? found.iccid : null,
-          });
+          result.push(found);
         }
         return result;
 
@@ -232,7 +227,6 @@ export class QpayConnectionService {
               'RT-AccessCode': this.accessCode,
               'Content-Type': 'application/json',
             },
-            timeout: 10000,
           },
         ),
       );
@@ -344,3 +338,6 @@ function InvoiceBuilder(invoiceData: InvoiceRequest, invoiceCode: string): Invoi
     };
 }
 
+function delay(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
