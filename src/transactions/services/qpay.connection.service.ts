@@ -1,6 +1,6 @@
 import { HttpService } from "@nestjs/axios";
-import { Injectable, Logger, BadRequestException, HttpException, HttpStatus } from "@nestjs/common";
-import { firstValueFrom } from "rxjs";
+import { Injectable, Logger, BadRequestException, HttpException, HttpStatus, NotFoundException } from "@nestjs/common";
+import { firstValueFrom, NotFoundError } from "rxjs";
 import { ApiDataObject } from "src/inquiry/dto/data-package.dto";
 import { TokenResponse } from "../dto/token.response.dto";
 import { TopupEsim } from "../dto/esimtopup.resquest.dto";
@@ -11,6 +11,8 @@ import { DataPackageEntity } from "src/entities/data-packages.entity";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { CheckPaymentRequest } from "../dto/check.payment.request.dto";
+import { InvoicePayment } from "src/entities/invoice-payment.entity";
+import { throws } from "assert";
 
 interface InvoiceQpayRequest {
   invoice_code: string;
@@ -45,21 +47,23 @@ interface InvoiceResponse {
   // add other response fields as needed
 }
 
-interface PaymentCheckRequest {
-  object_type: string;
-  object_id: string;
-  offset: {
-    "page_number": number,
-    "page_limit":number
-  };
-  // add other response fields as needed
-}
-
 interface ApiResponse {
   errorCode: string | null;
   errorMsg: string | null;
   success: boolean;
   obj: ApiDataObject;
+}
+
+interface packageInfo {
+  packageCode: string,
+  count: number,
+  price: number
+}
+
+interface esimOrderReq {
+  transactionId: string;      // transactionId as a string
+  amount: number;             // amount as a number
+  packageInfoList: packageInfo[];
 }
 
 @Injectable()
@@ -77,7 +81,9 @@ export class QpayConnectionService {
       private readonly httpService: HttpService,
       @InjectRepository(DataPackageEntity)
       private readonly dataPackageRepo: Repository<DataPackageEntity>,
-    ) {
+      @InjectRepository(InvoicePayment)
+      private readonly invoicePaymentRepository: Repository<InvoicePayment>,
+      ) {
       // Validate env vars on service creation
       if (!this.qpayUser || !this.qpaySecret) {
         throw new Error('Missing QPAY_API_USER or QPAY_API_SECRET in .env');
@@ -135,16 +141,94 @@ export class QpayConnectionService {
                 )
             );
             this.logger.log(`Invoice created successfully. invoice_id: ${response.data.invoice_id}`);
-            return response.data;
+            const invoiceResponse = response.data;
+            const invoiceReport = this.invoicePaymentRepository.create({
+              invoiceId: invoiceResponse.invoice_id,
+              amount: invoiceData.amount,
+              senderInfo: invoiceData.phone+','+invoiceData.email,
+              packageInfo: invoiceData.packages
+            });
+            invoiceReport.invoiceCreatedAt = new Date();
+            // Save invoice transaction first
+            await this.invoicePaymentRepository.save(invoiceReport);
+            return invoiceResponse;
         } catch (error) {
             this.logger.error(`Error creating invoice: ${error instanceof Error ? error.message : 'Unknown error'}`);
             throw error;
         }
     }
 
-    async checkInvoice(data: CheckPaymentRequest): Promise<any> {
+    async checkPayment(data: CheckPaymentRequest): Promise<any> {
     try {
-      this.logger.log(`Checking invoice process: ${data.invoiceId}`);
+      const paymentResponse = await this.checkInvoice(data.invoiceId);
+
+      if(paymentResponse.paid_amount){
+        const invoicePayment = await this.invoicePaymentRepository.findOne({where: {invoiceId: data.invoiceId} });
+
+        if(!invoicePayment)
+          throw new NotFoundException('InvoiceId not found from Transaction');
+        
+        invoicePayment.paidAmount = paymentResponse.paid_amount;
+        invoicePayment.paymentId = paymentResponse.rows[0].payment_id;
+        invoicePayment.paymentStatus = paymentResponse.rows[0].payment_status;
+        invoicePayment.p2pTrancation = paymentResponse.rows[0].p2p_transactions;
+        invoicePayment.paymentResponse = paymentResponse;
+        invoicePayment.paymentCheckedAt = new Date();
+        
+        const packages = await this.dataPackageRepo.find({});
+        const result: any = [];
+        const orderReq : esimOrderReq = {
+          transactionId: "",
+          amount: 0,
+          packageInfoList: []
+        };
+        let totalAmount = 0;
+        for(const pkg of data.packages){
+          const currentPackage = packages.find(p => p.packageCode === pkg.packageCode);
+          if (!currentPackage) {
+            throw new BadRequestException('Invalid package code.');
+          }
+          const price = Number(currentPackage.price);
+          const packageInfo: packageInfo = {
+            packageCode: pkg.packageCode,
+            price: price,
+            count: pkg.quantity
+          };
+          orderReq.packageInfoList.push(packageInfo);
+          totalAmount += currentPackage.price * pkg.quantity;
+        }
+        orderReq.amount = totalAmount;
+        orderReq.transactionId= `GOY_SIM-${Date.now()}`,
+        console.log(orderReq);
+
+        const orderEsim = await this.orderEsimWeb(orderReq);
+        await delay(800);
+        const myEsimResponse: any = await this.getMyEsimPackages(1, 100);
+        for(const esim of myEsimResponse.obj.esimList){
+          if(esim.orderNo === orderEsim.obj.orderNo){
+            this.logger.log(`eSIM found in my packages. ICCID: ${esim.iccid}`);
+            result.push(esim);
+          }
+        }
+
+        invoicePayment.orderResponse = orderEsim;
+        invoicePayment.currentEsim = result;
+        invoicePayment.completedAt = new Date();
+        await this.invoicePaymentRepository.save(invoicePayment);
+
+        return result;
+      }
+      else
+        throw new BadRequestException('Төлбөр хийгдээгүй байна.');
+    } catch (error) {
+      this.logger.error(`Error checking invoice: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw error;
+    }
+  }
+
+  async checkInvoice(invoiceId: string) : Promise<any> {
+    try{
+      this.logger.log(`Checking invoice process: ${invoiceId}`);
       const token = await this.getToken();
       const checkUrl = `${this.qpayBaseUrl}/payment/check`;
       
@@ -153,7 +237,7 @@ export class QpayConnectionService {
           checkUrl,
           {
             object_type: 'INVOICE',
-            object_id: data.invoiceId,
+            object_id: invoiceId,
             offset: {
               "page_number": 1,
               "page_limit": 100
@@ -167,42 +251,10 @@ export class QpayConnectionService {
           }
         )
       );
-      this.logger.log(`Invoice status retrieved. invoice_id: ${data.invoiceId}`);
-
-      if(response.data.paid_amount){
-        const packages = await this.dataPackageRepo.find({});
-        const result: any = [];
-        for(const pkg of data.packages){
-          const packageCode = pkg.packageCode;
-          const count = pkg.quantity;
-
-          const currentPackage = packages.find(pkg => pkg.packageCode === packageCode);
-          if (!currentPackage) {
-            throw new BadRequestException('Invalid package code.');
-          }
-
-          const orderEsim = await this.orderEsimWeb(packageCode, currentPackage.price*count,count);
-          this.logger.log(`eSIM ordered. orderNo: ${orderEsim.obj.orderNo}, orderAmount: ${currentPackage.price}`);
-          await delay(500);
-          const myEsimResponse: any = await this.getMyEsimPackages(1, 500);
-          this.logger.log(`Retrieved my eSIM packages to find the ordered eSIM. + ${myEsimResponse}`);
-          const found = myEsimResponse?.obj?.esimList?.find(
-          (esim: EsimItem) =>
-            esim.orderNo === orderEsim.obj.orderNo
-          );
-          if (found) {
-            this.logger.log(`eSIM found in my packages. ICCID: ${found.iccid}`);
-          }
-          result.push(found);
-        }
-        return result;
-
-      }
-      else
-        throw new BadRequestException('Төлбөр хийгдээгүй байна.');
+      this.logger.log(`Invoice status retrieved. invoice_id: ${invoiceId}`);
+      return response.data;
     } catch (error) {
-      this.logger.error(`Error checking invoice: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      throw error;
+      this.handleError(error, 'Failed to get My eSIM packages');
     }
   }
 
@@ -257,22 +309,16 @@ export class QpayConnectionService {
         throw new Error("Method not implemented.");
     }
 
-  async orderEsimWeb(packageCode: string, amount: number, count: number): Promise<esimOrderResponse> {
+  async orderEsimWeb(orderReq: esimOrderReq): Promise<esimOrderResponse> {
     const url = `${this.apiBaseUrl}/open/esim/order`;
       this.logger.log(`eSIM order processing ============>: ${url}`);
       const response: any = await firstValueFrom(
           this.httpService.post<ApiResponse>(
               url,
               {
-                transactionId: `GOY_SIM-${Date.now()}`,
-                amount: amount,
-                packageInfoList: [
-                  {
-                    packageCode: packageCode,
-                    count: count,
-                    price: amount
-                  }
-                ]
+                transactionId: orderReq.transactionId,
+                amount: orderReq.amount,
+                packageInfoList: orderReq.packageInfoList
               },
               {
                   headers: {
@@ -307,6 +353,46 @@ export class QpayConnectionService {
       );
       const data: ApiResponse = response.data;
       return data;
+  }
+
+  async getLog(invoiceId: string): Promise<any> {
+    const invoicePayment = await this.invoicePaymentRepository.findOne({where: {invoiceId: invoiceId} });
+    
+    const checkUrl = `${this.qpayBaseUrl}/payment/check`;
+    const token = await this.getToken();
+    const response: any = await firstValueFrom(
+        this.httpService.post<any>(
+          checkUrl,
+          {
+            object_type: 'INVOICE',
+            object_id: invoiceId,
+            offset: {
+              "page_number": 1,
+              "page_limit": 100
+            }
+          },
+          {
+            headers: {
+              'Authorization': `Bearer ${token.access_token}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        )
+      );
+      this.logger.log(`Invoice status retrieved. invoice_id: ${invoiceId}`);
+      const paymentResponse = response.data;
+      if(!invoicePayment)
+          throw new NotFoundException('InvoiceId not found from Transaction');
+        invoicePayment.paidAmount = paymentResponse.paid_amount;
+        invoicePayment.paymentId = paymentResponse.rows[0].payment_id;
+        invoicePayment.paymentStatus = paymentResponse.rows[0].payment_status;
+        invoicePayment.p2pTrancation = paymentResponse.rows[0].p2p_transactions;
+        invoicePayment.paymentResponse = paymentResponse;
+        invoicePayment.paymentCheckedAt = new Date();
+        await this.invoicePaymentRepository.save(invoicePayment);
+    
+    return invoicePayment;
+    
   }
 }
 

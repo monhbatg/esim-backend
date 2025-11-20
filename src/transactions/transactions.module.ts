@@ -9,10 +9,11 @@ import { AuthModule } from '../auth/auth.module';
 import { QpayConnectionService } from './services/qpay.connection.service';
 import { HttpModule } from '@nestjs/axios';
 import { DataPackageEntity } from 'src/entities/data-packages.entity';
+import { InvoicePayment } from 'src/entities/invoice-payment.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Transaction, ESimPurchase, DataPackageEntity]),
+    TypeOrmModule.forFeature([Transaction, ESimPurchase, DataPackageEntity, InvoicePayment]),
     HttpModule, // Import HttpModule for making API calls to eSIM Access
     WalletModule, // Import WalletModule to use WalletService
     forwardRef(() => AuthModule), // Import AuthModule to access TokenBlacklistService for JwtAuthGuard

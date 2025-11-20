@@ -27,7 +27,7 @@ export class DataPackageEntity {
   @Column({ type: 'varchar'  })
   name: string;
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, nullable: true })
+  @Column({ type: 'numeric', precision: 12, scale: 0, nullable: true })
   price: number;
 
   @Column({ name: 'currency_code', type: 'varchar',  nullable: true })
@@ -66,7 +66,7 @@ export class DataPackageEntity {
   @Column({ default: false })
   favorite: boolean;
 
-  @Column({ name: 'retail_price', type: 'numeric', precision: 12, scale: 2, nullable: true })
+  @Column({ name: 'retail_price', type: 'numeric', precision: 12, scale: 0, nullable: true })
   retailPrice: number;
 
   @Column({ type: 'varchar', nullable: true })

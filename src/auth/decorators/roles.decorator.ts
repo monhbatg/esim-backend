@@ -3,3 +3,5 @@ import { UserRole } from '../../users/dto/user-role.enum';
 import { ROLES_KEY } from '../guards/roles.guard';
 
 export const Roles = (...roles: UserRole[]) => SetMetadata(ROLES_KEY, roles);
+export const IS_PUBLIC_KEY = 'isPublic';
+export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
