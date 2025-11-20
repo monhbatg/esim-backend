@@ -2,16 +2,13 @@ import {
     Column, 
     Entity, 
     Index, 
-    JoinColumn, 
-    ManyToOne, 
     PrimaryGeneratedColumn, 
 } from "typeorm";
-import { Transaction } from "./transaction.entity";
  
 
 @Entity('invoice_payment')
 @Index(['invoiceId','paymentId'])
-@Index(['transactionId'], { unique: true})
+@Index(['transactionId'])
 export class InvoicePayment{
     @PrimaryGeneratedColumn('uuid')
     id: string
@@ -49,12 +46,8 @@ export class InvoicePayment{
     @Column( { type: 'timestamp', nullable: true})
     paymentCheckedAt: Date | null;
 
-    @Column({nullable: true})
+    @Column({unique: true, nullable: true})
     transactionId: String;
-
-    @ManyToOne(()=> Transaction, {onDelete: 'CASCADE'})
-    @JoinColumn({ name: 'transactionId' })
-    transaction: Transaction;
 
     @Column({ type: 'json', nullable: true })
     orderResponse: Record<string, any> | null;

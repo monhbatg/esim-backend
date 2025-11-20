@@ -211,6 +211,7 @@ export class QpayConnectionService {
           }
         }
 
+        invoicePayment.transactionId = orderReq.transactionId;
         invoicePayment.orderResponse = orderEsim;
         invoicePayment.currentEsim = result;
         invoicePayment.completedAt = new Date();
