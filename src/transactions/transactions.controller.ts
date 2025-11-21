@@ -39,13 +39,20 @@ import {
 } from '../users/dto/transaction-types.enum';
 import { Transaction } from '../entities/transaction.entity';
 import { ESimPurchase } from '../entities/esim-purchase.entity';
+import { QpayConnectionService } from './services/qpay.connection.service';
+import type { InvoiceRequest } from './dto/invoice.request.dto';
+import { TokenResponse } from './dto/token.response.dto';
+import * as esimTopupResquestDto from './dto/esimtopup.resquest.dto';
 
 @ApiTags('transactions')
 @Controller('transactions')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class TransactionsController {
-  constructor(private readonly transactionsService: TransactionsService) {}
+  constructor(
+    private readonly transactionsService: TransactionsService,
+    private readonly qpayConnectionService: QpayConnectionService,
+  ) {}
 
   /**
    * POST /transactions
@@ -582,5 +589,121 @@ export class TransactionsController {
     }
 
     return dto;
+  }
+
+  @Post('createInvoice')
+  @ApiOperation({
+    summary: 'Create QPay invoice',
+    description:"QPay-с нэхэмжлэл үүсгэх",
+  })
+  @ApiBody({ type: CreateTransactionDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Invoice created successfully',
+    type: TransactionResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Invalid input data, insufficient balance, or invalid transaction type',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User or wallet not found',
+  })
+  async createInvoice(
+     @Request() req: InvoiceRequest,
+  ): Promise<any> {
+    return await this.qpayConnectionService.createInvoice(req);
+  }
+
+  @Post('check/:invoiceId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Check QPay invoice status',
+    description: 'Нэхэмжлэл төлөгдсөн эсэхийг шалгах',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Invoice status retrieved successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid invoice ID',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Invoice not found',
+  })
+  async checkInvoiceStatus(
+    @Request() req: AuthRequest,
+    @Param('invoiceId') invoiceId: string,
+  ): Promise<any> {
+    return await this.qpayConnectionService.checkInvoice(invoiceId);
+  }
+
+  @Post('order/esim')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Check QPay invoice status',
+    description: 'Нэхэмжлэл төлөгдсөн эсэхийг шалгах',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Invoice status retrieved successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid invoice ID',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Invoice not found',
+  })
+  async orderEsim(
+    @Request() req: AuthRequest,
+  ): Promise<any> {
+    return await this.qpayConnectionService.orderEsim();
+  }
+
+  @Post('esim/topup')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'top up esim',
+    description: 'eSIM цэнэглэх',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Invoice status retrieved successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid invoice ID',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Invoice not found',
+  })
+  async topupEsim(
+    @Request() req: AuthRequest,
+    @Body() body: esimTopupResquestDto.TopupEsim,
+  ): Promise<any> {
+    return await this.qpayConnectionService.topupEsim(body);
   }
 }

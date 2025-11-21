@@ -3,6 +3,13 @@ import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { AxiosError } from 'axios';
+import { CreateDataPackageDto } from '../dto/create-data-package.dto';
+import { DataPackageMapper } from '../mapper/data-package.mapper';
+import { DataPackageEntity } from 'src/entities/data-packages.entity';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Util } from 'src/transactions/utils/util';
+import { EsimItem, MyEsimPackagesResponseDto } from '../dto/esim.package.response.dto';
 
 interface Operator {
   operatorName: string;
@@ -61,7 +68,11 @@ export class InquiryPackagesService {
   private readonly apiBaseUrl = 'https://api.esimaccess.com/api/v1';
   private readonly accessCode = process.env.ESIM_ACCESS_CODE;
 
-  constructor(private readonly httpService: HttpService) {}
+  constructor(
+    private readonly httpService: HttpService,
+    @InjectRepository(DataPackageEntity)
+    private readonly dataPackageRepo: Repository<DataPackageEntity>,
+  ) {}
 
   /**
    * Get all available data packages from eSIM provider
@@ -301,4 +312,267 @@ export class InquiryPackagesService {
     }
     return 'Unknown error occurred';
   }
+
+
+  async saveAllDataPackages(): Promise<DataPackage[]> {
+    try {
+      const url = `${this.apiBaseUrl}/open/package/list`;
+      this.logger.log(`Fetching data packages from: ${url}`);
+
+      const response: any = await firstValueFrom(
+        this.httpService.post<ApiResponse>(
+          url,
+          {
+            locationCode: '',
+            type: '',
+            slug: '',
+            packageCode: '',
+            iccid: '',
+          },
+          {
+            headers: {
+              'RT-AccessCode': this.accessCode,
+              'Content-Type': 'application/json',
+            },
+            timeout: 10000,
+          },
+        ),
+      );
+
+      const data: ApiResponse = response.data;
+      const savedEntities: DataPackageEntity[] = [];
+      if (
+        data &&
+        data.success &&
+        data.obj &&
+        Array.isArray(data.obj.packageList) &&
+        data.obj.packageList.length > 0
+      ) {
+        const packages = data.obj.packageList;
+        this.logger.log(`Successfully fetched ${packages.length} packages`);
+
+        // Map API package -> CreateDataPackageDto -> entity using mapper
+        const entities: DataPackageEntity[] = packages
+          .map((pkg) => {
+            try {
+              return DataPackageMapper.fromDto(
+                pkg as unknown as CreateDataPackageDto,
+              ) as unknown as DataPackageEntity;
+            } catch (err) {
+              this.logger.error('Mapping package to entity failed', err as Error);
+              return null;
+            }
+          })
+          .filter((e): e is DataPackageEntity => e !== null);
+
+        if (entities.length === 0) {
+          this.logger.warn('No mappable entities found - nothing to save');
+          return packages;
+        }
+
+        // Prefer bulk upsert if available (insert or update on conflict)
+      if (typeof (this.dataPackageRepo as any).upsert === 'function') {
+        try {
+          // Use packageCode as unique key. Adjust conflictPaths if your unique column differs.
+          await (this.dataPackageRepo as any).upsert(entities, ['packageCode']);
+          this.logger.log(`Upserted ${entities.length} packages using repository.upsert`);
+          // Fetch and return saved rows (optional)
+          const packageCodes = entities.map((e) => e.packageCode);
+          const saved = await this.dataPackageRepo.findBy(packageCodes.length ? { packageCode: packageCodes } as any : {});
+          return saved;
+        } catch (err) {
+          this.logger.error('Bulk upsert failed, falling back to per-item save', err as Error);
+        }
+      }
+
+      // Fallback: preload existing and save per item (works with older TypeORM)
+      
+      for (const entity of entities) {
+        try {
+          // Try to preload existing by unique key
+          const existing = await this.dataPackageRepo.findOneBy({ packageCode: entity.packageCode } as any);
+          if (existing) {
+            const merged = this.dataPackageRepo.merge(existing, entity);
+            savedEntities.push(await this.dataPackageRepo.save(merged));
+          } else {
+            savedEntities.push(await this.dataPackageRepo.save(entity));
+          }
+        } catch (err) {
+          this.logger.error(`Failed to save package ${entity.packageCode}`, err as Error);
+        }
+      }
+
+      this.logger.log(`Saved ${savedEntities.length} packages to DB (fallback path)`);
+      return savedEntities;
+      }
+
+      this.logger.warn('No packages found in API response');
+      return savedEntities;
+    } catch (error) {
+      this.handleError(error, 'Failed to fetch data packages');
+    }
+  }
+
+  
+
+  async getMyEsimPackages(page: number , limit: number): Promise<any[]> {
+    try {
+      this.logger.log(`Checking my eSIM packages from eSIM web`);
+      const url = `${this.apiBaseUrl}/open/esim/query`;
+      this.logger.log(`Fetching data packages from: ${url}`);
+      const response: any = await firstValueFrom(
+        this.httpService.post<ApiResponse>(
+          url,
+          {
+            orderNo: '',
+            esimTranNo:'',
+            iccid: '',
+            pager: 
+              { pageNum: page,
+                pageSize: limit 
+              }
+          },
+          {
+            headers: {
+              'RT-AccessCode': this.accessCode,
+              'Content-Type': 'application/json',
+            },
+            timeout: 10000,
+          },
+        ),
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError(error, 'Failed to get My eSIM packages');
+    }
+  }
+
+  async actionMyEsimPackage(actionNo: number, orderNo: string ): Promise<any[]> {
+    try {
+      this.logger.log(
+        `Performing action ${actionNo} on eSIM: ${orderNo}`,
+      );
+
+      
+
+      // Fetch all eSIM packages
+      const myEsimResponse: any = await this.getMyEsimPackages(1, 100);
+      // Check if esimTranNo exists in the response
+      const found = myEsimResponse?.obj?.esimList?.find(
+        (esim: EsimItem) =>
+          esim.orderNo === orderNo
+      );
+
+      if (!found) {
+        this.logger.warn(`eSIM not found for identifier ${orderNo}`);
+        throw new HttpException(
+          { 
+            success: false,
+            message: `eSIM not found for identifier ${orderNo}`,
+          },
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      
+
+      const targetEsimTranNo = found.esimTranNo;
+      this.logger.log(`Found eSIM. esimTranNo=${targetEsimTranNo}, proceeding with action ${actionNo}`);
+
+      
+
+      const url = `${this.apiBaseUrl}${Util.selectUrl(actionNo)}`;
+      this.logger.log(`Fetching data packages from: ${url}`);
+      const response: any = await firstValueFrom(
+        this.httpService.post<ApiResponse>(
+          url,
+          {
+            esimTranNo: targetEsimTranNo,
+          },
+          {
+            headers: {
+              'RT-AccessCode': this.accessCode,
+              'Content-Type': 'application/json',
+            },
+            timeout: 10000,
+          },
+        ),
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError(error, 'Failed to get My eSIM packages');
+    }
+  }
+
+
+
+
+
+  // Get from local database
+  async getLocalPackages(): Promise<DataPackageEntity[]> {
+    try {
+      const favs = await this.dataPackageRepo.find({
+      });
+      this.logger.log(`Found ${favs.length} all packages`);
+      return favs;
+    } catch (error) {
+      this.handleError(error, 'Failed to get favorite packages');
+    }
+  }
+
+
+  async getFavPackages(): Promise<DataPackageEntity[]> {
+    try {
+      const favs = await this.dataPackageRepo.find({
+        where: { favorite: true },
+      });
+      this.logger.log(`Found ${favs.length} favorite packages`);
+      return favs;
+    } catch (error) {
+      this.handleError(error, 'Failed to get favorite packages');
+    }
+  }
+
+
+  async getLocalPackagesByFilters(
+    params: PackageQueryParams,
+  ): Promise<any> {
+    try {
+      this.logger.log(
+        `Querying local packages with filters: ${JSON.stringify(params)}`,
+      );
+
+      const qb = this.dataPackageRepo.createQueryBuilder('p');
+
+      if (params.locationCode) {
+        qb.andWhere('p.location = :location', { location: params.locationCode });
+      }
+
+      if (params.type) {
+        // try common type fields on the entity: dataType or activeType or type
+        qb.andWhere(
+          '(p.dataType = :type OR p.activeType = :type OR p.type = :type)',
+          { type: params.type },
+        );
+      }
+
+      if (params.slug) {
+        qb.andWhere('p.slug ILIKE :slug', { slug: `%${params.slug}%` });
+      }
+
+      if (params.packageCode) {
+        qb.andWhere('p.packageCode = :packageCode', {
+          packageCode: params.packageCode,
+        });
+      }
+
+      const results = await qb.getMany();
+      this.logger.log(`Found ${results.length} local packages matching filters`);
+      return results;
+    } catch (error) {
+      this.handleError(error, 'Failed to fetch local packages with filters');
+    }
+  }
+
+
 }

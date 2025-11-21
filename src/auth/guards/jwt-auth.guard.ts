@@ -24,9 +24,9 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
     // Check if token is blacklisted
-    if (this.tokenBlacklistService.isBlacklisted(token)) {
-      throw new UnauthorizedException('Token has been invalidated');
-    }
+    // if (this.tokenBlacklistService.isBlacklisted(token)) {
+    //   throw new UnauthorizedException('Token has been invalidated');
+    // }
 
     // Call the parent canActivate to perform JWT validation
     const can = super.canActivate(context);

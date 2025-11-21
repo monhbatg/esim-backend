@@ -6,13 +6,20 @@ import {
   HttpStatus,
   Param,
   ParseIntPipe,
+  Request,
+  UseGuards,
   Post,
+  ValidationPipe,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ApiOperation, ApiResponse, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import type { AuthRequest } from '../auth/interfaces/auth-request.interface';
 import { DataPackageDto } from './dto/data-package.dto';
 import { LocationDto } from './dto/location.dto';
 import { InquiryPackagesService } from './services/inquiry.packages.service';
 import { LocationsService } from './services/locations.service';
+import { patch } from 'axios';
+import { PackageQueryLastDto } from './dto/package.query.last.dto';
 
 export class PackageQueryDto {
   locationCode?: string;
@@ -24,6 +31,8 @@ export class PackageQueryDto {
 
 @ApiTags('inquiry')
 @Controller('inquiry')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 export class InquiryController {
   constructor(
     private readonly inquiryPackagesService: InquiryPackagesService,
@@ -223,5 +232,143 @@ export class InquiryController {
     }
 
     return locations;
+  }
+
+  @Post('savePackages')
+  @ApiOperation({
+    summary: 'Get all available data packages',
+    description:
+      'eSIM web-с бүх багцуудыг татаж авч, хадгалах',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully retrieved data packages',
+    type: DataPackageDto,
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Failed to fetch data packages from external API',
+  })
+  async saveAllPackages(): Promise<DataPackageDto[]> {
+    const packages = await this.inquiryPackagesService.saveAllDataPackages();
+    return packages;
+  }
+
+  @Get('favPackages')
+  @ApiOperation({
+    summary: 'Get all liked data packages from local DB',
+    description:
+      'Онцлох багцуудыг local DB-аас авах',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully retrieved data packages',
+    type: DataPackageDto,
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Failed to fetch data packages from external API',
+  })
+  async getFavPackages(): Promise<DataPackageDto[]> {
+    const packages = await this.inquiryPackagesService.getFavPackages();
+    return packages;
+  }
+
+  @Get('myesim/page/:page/limit/:limit')
+  @ApiOperation({
+    summary: 'Get all bought data packages',
+    description:
+      'eSIM web-с худалсан авсан багцуудыг авах',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully retrieved data packages',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Failed to fetch data packages from external API',
+  })
+  async getMyEsimPackages(
+    @Request() req: AuthRequest,
+    @Param('page', new ParseIntPipe()) page: number,
+    @Param('limit', new ParseIntPipe()) limit: number,
+  ): Promise<any> {
+    const packages = await this.inquiryPackagesService.getMyEsimPackages(page, limit);
+    return packages;
+  }
+
+  @Post('myesim/action/:actionId/transno/:orderNo')
+  @ApiOperation({
+    summary: 'Get all bought data packages',
+    description:
+      'eSIM web-с transNo ашиглан тухайн eSIM багц дээр action хийх 1-cancel, 2-suspend, 3-unsuspend, 4-revoke',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully retrieved data packages',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Failed to fetch data packages from external API',
+  })
+  async cancelMyEsimPackage(
+    @Param('actionId', new ParseIntPipe()) actionId: number,
+    @Param('orderNo') orderNo: string,
+    @Request() req: AuthRequest,
+  ): Promise<any> {
+    const packages = await this.inquiryPackagesService.actionMyEsimPackage(actionId, orderNo);
+    return packages;
+  }
+
+
+  @Post('packages/localsearch')
+  @ApiOperation({
+    summary: 'Search packages with custom filters from local DB',
+    description: 'Search eSIM packages with custom filter parameters from Local DB',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully retrieved filtered packages',
+    type: DataPackageDto,
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Failed to fetch packages from external API',
+  })
+  async searchLocalPackages(
+    @Body(new ValidationPipe({ whitelist: true })) body:  PackageQueryLastDto,
+  ): Promise<any> {
+    const packages =
+      await this.inquiryPackagesService.getLocalPackagesByFilters(body);
+
+    return packages;
+  }
+
+  @Get('localPackages')
+  @ApiOperation({
+    summary: 'Get all liked data packages from local DB',
+    description:
+      'Онцлох багцуудыг local DB-аас авах',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully retrieved data packages',
+    type: DataPackageDto,
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Failed to fetch data packages from external API',
+  })
+  async getLocalPackages(): Promise<DataPackageDto[]> {
+    const packages = await this.inquiryPackagesService.getLocalPackages();
+    return packages;
   }
 }
