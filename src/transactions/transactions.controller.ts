@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -44,6 +45,8 @@ import type { TopupEsim } from './dto/esimtopup.resquest.dto';
 import type { InvoiceRequest } from './dto/invoice.request.dto';
 import type { CheckPaymentRequest } from './dto/check.payment.request.dto';
 import { Public } from 'src/auth/decorators/roles.decorator';
+import type { esimOrderReq } from './dto/esim.order.request.dto';
+import { throws } from 'assert';
 
 @ApiTags('transactions')
 @Controller('transactions')
@@ -683,11 +686,11 @@ export class TransactionsController {
     return await this.qpayConnectionService.topupEsim(body);
   }
 
-  @Get('/getLog/:invoiceId')
+  @Post('/orderEsim')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'top up esim',
-    description: 'eSIM цэнэглэх',
+    summary: 'Admin эсвэл Operator захиалга хийх',
+    description: 'eSIM захиалга',
   })
   @ApiResponse({
     status: 200,
@@ -707,8 +710,11 @@ export class TransactionsController {
   })
   async getInvoiceLog(
     @Request() req: AuthRequest,
-    @Param('invoiceId') invoiceId: string,
+    @Body() body: esimOrderReq
   ): Promise<any> {
-    return await this.qpayConnectionService.getLog(invoiceId);
+    if(req.user.role === 'ADMIN' || req.user.role === 'SUPPORT')
+      return await this.qpayConnectionService.orderEsimWeb(body);
+    else
+      throw new ForbiddenException('Permission denied');
   }
 }

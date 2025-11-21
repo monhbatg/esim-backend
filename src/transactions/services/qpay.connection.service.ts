@@ -355,46 +355,6 @@ export class QpayConnectionService {
       const data: ApiResponse = response.data;
       return data;
   }
-
-  async getLog(invoiceId: string): Promise<any> {
-    const invoicePayment = await this.invoicePaymentRepository.findOne({where: {invoiceId: invoiceId} });
-    
-    const checkUrl = `${this.qpayBaseUrl}/payment/check`;
-    const token = await this.getToken();
-    const response: any = await firstValueFrom(
-        this.httpService.post<any>(
-          checkUrl,
-          {
-            object_type: 'INVOICE',
-            object_id: invoiceId,
-            offset: {
-              "page_number": 1,
-              "page_limit": 100
-            }
-          },
-          {
-            headers: {
-              'Authorization': `Bearer ${token.access_token}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        )
-      );
-      this.logger.log(`Invoice status retrieved. invoice_id: ${invoiceId}`);
-      const paymentResponse = response.data;
-      if(!invoicePayment)
-          throw new NotFoundException('InvoiceId not found from Transaction');
-        invoicePayment.paidAmount = paymentResponse.paid_amount;
-        invoicePayment.paymentId = paymentResponse.rows[0].payment_id;
-        invoicePayment.paymentStatus = paymentResponse.rows[0].payment_status;
-        invoicePayment.p2pTrancation = paymentResponse.rows[0].p2p_transactions;
-        invoicePayment.paymentResponse = paymentResponse;
-        invoicePayment.paymentCheckedAt = new Date();
-        await this.invoicePaymentRepository.save(invoicePayment);
-    
-    return invoicePayment;
-    
-  }
 }
 
 function InvoiceBuilder(invoiceData: InvoiceRequest, invoiceCode: string): InvoiceQpayRequest {
