@@ -1,15 +1,15 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Like, Raw, Repository } from 'typeorm';
 import { Category } from '../../entities/category.entity';
 import { Country } from '../../entities/country.entity';
-import { InquiryPackagesService } from '../../inquiry/services/inquiry.packages.service';
-import { MarketplaceCategoryDto } from '../dto/marketplace-response.dto';
+import { Package } from '../../entities/package.entity';
 import {
-  CountryFilterDto,
   CategoryFilterDto,
+  CountryFilterDto,
 } from '../dto/filter-response.dto';
-import { CURRENCY_CONSTANTS } from '../constants/currency.constants';
+import { MarketplaceCategoryDto } from '../dto/marketplace-response.dto';
+// import { CURRENCY_CONSTANTS } from '../constants/currency.constants';
 
 @Injectable()
 export class MarketplaceService {
@@ -18,7 +18,8 @@ export class MarketplaceService {
     private readonly categoryRepository: Repository<Category>,
     @InjectRepository(Country)
     private readonly countryRepository: Repository<Country>,
-    private readonly inquiryPackagesService: InquiryPackagesService,
+    @InjectRepository(Package)
+    private readonly packageRepository: Repository<Package>,
   ) {}
 
   /**
@@ -133,15 +134,16 @@ export class MarketplaceService {
 
   /**
    * Get eSIM packages for a specific country code
-   * Uses the country_code from marketplace to fetch packages from esimaccess API
-   * Converts prices to MNT using the configured exchange rate
+   * Fetches packages from the local 'packages' table
    */
   async getPackagesByCountryCode(
     countryCode: string,
   ): Promise<Array<Record<string, unknown>>> {
+    const upperCountryCode = countryCode.toUpperCase();
+
     // Validate country code exists in our database
     const country = await this.countryRepository.findOne({
-      where: { country_code: countryCode.toUpperCase() },
+      where: { country_code: upperCountryCode },
     });
 
     if (!country) {
@@ -150,35 +152,47 @@ export class MarketplaceService {
       );
     }
 
-    // Fetch packages from esimaccess API using locationCode
-    const packages = await this.inquiryPackagesService.getDataPackagesByCountry(
-      countryCode.toUpperCase(),
-    );
-
-    // Transform prices: value * 10,000 (10000 = $1.00) then convert to MNT
-    return packages.map((pkg) => {
-      // Use retailPrice if it exists, otherwise use price as retailPrice
-      const basePrice = pkg.retailPrice ?? pkg.price;
-
-      // Calculate USD price from API value
-      // Formula: value * 10,000 where 10000 = $1.00
-      // The API price is in units where 10000 units = $1.00
-      // So USD = price / 10000
-      const usdPrice = basePrice / CURRENCY_CONSTANTS.PRICE_MULTIPLIER;
-
-      // Convert USD to MNT using exchange rate
-      const retailPriceMnt = Math.round(
-        usdPrice * CURRENCY_CONSTANTS.USD_TO_MNT_RATE,
-      );
-
-      // Keep both price (original API price) and retailPrice (converted to MNT)
-      return {
-        ...pkg,
-        price: pkg.price, // Original price from API
-        retailPrice: pkg.retailPrice, // Converted price in MNT
-        priceMnt: retailPriceMnt, // Converted price in MNT
-        currencyCode: CURRENCY_CONSTANTS.CURRENCY_CODE as string,
-      };
+    // Fetch packages from database
+    const packages = await this.packageRepository.find({
+      where: [
+        {
+          location: Like(`%${upperCountryCode}%`),
+          buy_price: Raw((alias) => `CAST(${alias} AS DECIMAL) > 0`),
+        },
+        {
+          location_code: upperCountryCode,
+          buy_price: Raw((alias) => `CAST(${alias} AS DECIMAL) > 0`),
+        },
+      ],
+      order: {
+        buy_price: 'ASC',
+      },
     });
+
+    return packages.map((pkg) => ({
+      id: pkg.id,
+      packageCode: pkg.package_code,
+      slug: pkg.slug,
+      name: pkg.name,
+      description: pkg.description,
+      currencyCode: pkg.currency_code,
+      volume: Number(pkg.volume),
+      duration: pkg.duration,
+      durationUnit: pkg.duration_unit,
+      smsStatus: pkg.sms_status,
+      dataType: pkg.data_type,
+      unusedValidTime: pkg.unused_valid_time,
+      activeType: pkg.active_type,
+      favorite: pkg.favorite,
+      supportTopupType: pkg.support_topup_type,
+      fupPolicy: pkg.fup_policy,
+      speed: pkg.speed,
+      ipExport: pkg.ip_export,
+      location: pkg.location,
+      locationCode: pkg.location_code,
+      buyPrice: parseFloat(pkg.buy_price),
+      createdAt: pkg.created_at,
+      updatedAt: pkg.updated_at,
+    }));
   }
 }
