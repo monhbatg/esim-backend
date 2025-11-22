@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { join } from 'path';
 import { SystemConfig } from '../entities/system-config.entity';
 
 @Module({
@@ -12,7 +13,7 @@ import { SystemConfig } from '../entities/system-config.entity';
         url: configService.get<string>('DATABASE_URL'),
         // Use glob pattern for entities, but also explicitly include SystemConfig to ensure it's loaded
         entities: [
-          __dirname + '/../**/*.entity{.ts,.js}',
+          join(__dirname, '..', '**', '*.entity{.ts,.js}'),
           SystemConfig, // Explicitly include SystemConfig entity
         ],
         synchronize: configService.get<string>('NODE_ENV') === 'development',

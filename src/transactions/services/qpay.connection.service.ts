@@ -7,7 +7,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { firstValueFrom } from 'rxjs';
-import { ApiDataObject } from 'src/inquiry/dto/data-package.dto';
+import { ApiDataObject } from '../../inquiry/dto/data-package.dto';
 import { SystemConfig } from '../../entities/system-config.entity';
 import { TopupEsim } from '../dto/esimtopup.resquest.dto';
 import { InvoiceRequest } from '../dto/invoice.request.dto';

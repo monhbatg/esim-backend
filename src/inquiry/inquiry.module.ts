@@ -4,8 +4,8 @@ import { InquiryController } from './inquiry.controller';
 import { InquiryPackagesService } from './services/inquiry.packages.service';
 import { LocationsService } from './services/locations.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { DataPackageEntity } from 'src/entities/data-packages.entity';
-import { TransactionsModule } from 'src/transactions/transactions.module';
+import { DataPackageEntity } from '../entities/data-packages.entity';
+import { TransactionsModule } from '../transactions/transactions.module';
 
 @Module({
   imports: [

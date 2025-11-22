@@ -1,7 +1,7 @@
 import { CreateDataPackageDto } from '../dto/create-data-package.dto';
-import { DataPackageEntity } from 'src/entities/data-packages.entity';
-import { DataPackageLocation } from 'src/entities/data-package-locations.entity';
-import { DataPackageOperator } from 'src/entities/data-package-operators.entity';
+import { DataPackageEntity } from '../../entities/data-packages.entity';
+import { DataPackageLocation } from '../../entities/data-package-locations.entity';
+import { DataPackageOperator } from '../../entities/data-package-operators.entity';
 
 export class DataPackageMapper {
   static fromDto(dto: CreateDataPackageDto): DataPackageEntity {

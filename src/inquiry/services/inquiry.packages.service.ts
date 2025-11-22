@@ -12,13 +12,13 @@ import { firstValueFrom } from 'rxjs';
 import { AxiosError } from 'axios';
 import { CreateDataPackageDto } from '../dto/create-data-package.dto';
 import { DataPackageMapper } from '../mapper/data-package.mapper';
-import { DataPackageEntity } from 'src/entities/data-packages.entity';
+import { DataPackageEntity } from '../../entities/data-packages.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Util } from 'src/transactions/utils/util';
+import { Util } from '../../transactions/utils/util';
 import { EsimItem } from '../dto/esim.package.response.dto';
-import { TransactionsService } from 'src/transactions/transactions.service';
-import { QueryEsimDto } from 'src/transactions/dto/query-esim.dto';
+import { TransactionsService } from '../../transactions/transactions.service';
+import { QueryEsimDto } from '../../transactions/dto/query-esim.dto';
 
 interface Operator {
   operatorName: string;
