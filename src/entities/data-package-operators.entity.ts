@@ -14,10 +14,10 @@ export class DataPackageOperator {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'operator_name', type: 'varchar'  })
+  @Column({ name: 'operator_name', type: 'varchar' })
   operatorName: string;
 
-  @Column({ name: 'network_type', type: 'varchar'  })
+  @Column({ name: 'network_type', type: 'varchar' })
   networkType: string;
 
   @ManyToOne(() => DataPackageLocation, (loc) => loc.operatorList, {

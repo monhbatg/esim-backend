@@ -35,7 +35,10 @@ export class CategoriesService {
     return await this.categoryRepository.save(category);
   }
 
-  async update(id: number, updateCategoryDto: UpdateCategoryDto): Promise<Category> {
+  async update(
+    id: number,
+    updateCategoryDto: UpdateCategoryDto,
+  ): Promise<Category> {
     const category = await this.findOne(id);
     Object.assign(category, updateCategoryDto);
     return await this.categoryRepository.save(category);
@@ -46,4 +49,3 @@ export class CategoriesService {
     await this.categoryRepository.remove(category);
   }
 }
-

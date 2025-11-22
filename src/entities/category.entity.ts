@@ -34,4 +34,3 @@ export class Category {
   @UpdateDateColumn()
   updatedAt: Date;
 }
-

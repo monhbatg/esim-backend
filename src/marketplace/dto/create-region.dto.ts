@@ -20,4 +20,3 @@ export class CreateRegionDto {
   @MaxLength(100)
   name_mn: string;
 }
-

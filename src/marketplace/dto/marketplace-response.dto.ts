@@ -37,14 +37,21 @@ export class MarketplaceCountryDto {
 }
 
 export class MarketplaceCategoryDto {
-  @ApiProperty({ example: 'Top Destinations', description: 'Category name in English' })
+  @ApiProperty({
+    example: 'Top Destinations',
+    description: 'Category name in English',
+  })
   name_en: string;
 
-  @ApiProperty({ example: 'Шилдэг чиглэлүүд', description: 'Category name in Mongolian' })
+  @ApiProperty({
+    example: 'Шилдэг чиглэлүүд',
+    description: 'Category name in Mongolian',
+  })
   name_mn: string;
 
   @ApiPropertyOptional({
-    example: 'Most popular travel destinations for Mongolians based on bookings and trends.',
+    example:
+      'Most popular travel destinations for Mongolians based on bookings and trends.',
     description: 'Category description in English',
     nullable: true,
   })
@@ -63,4 +70,3 @@ export class MarketplaceCategoryDto {
   })
   countries: MarketplaceCountryDto[];
 }
-

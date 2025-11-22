@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Logger,
   NotFoundException,
   Param,
   Post,
@@ -21,34 +22,36 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Public } from '../auth/decorators/public.decorator';
 import type { AuthRequest } from '../auth/interfaces/auth-request.interface';
-import { TransactionsService } from './transactions.service';
-import { CreateTransactionDto } from './dto/create-transaction.dto';
-import {
-  TransactionResponseDto,
-  TransactionListResponseDto,
-} from './dto/transaction-response.dto';
-import { QueryTransactionsDto } from './dto/query-transactions.dto';
-import { PurchaseEsimDto } from './dto/purchase-esim.dto';
-import { ESimPurchaseResponseDto } from './dto/esim-purchase-response.dto';
-import { OrderEsimDto } from './dto/order-esim.dto';
-import { OrderEsimResponseDto } from './dto/order-esim-response.dto';
+import { ESimPurchase } from '../entities/esim-purchase.entity';
+import { Transaction } from '../entities/transaction.entity';
 import {
   TransactionStatus,
   TransactionType,
 } from '../users/dto/transaction-types.enum';
-import { Transaction } from '../entities/transaction.entity';
-import { ESimPurchase } from '../entities/esim-purchase.entity';
-import { QpayConnectionService } from './services/qpay.connection.service';
-import type { InvoiceRequest } from './dto/invoice.request.dto';
-import { TokenResponse } from './dto/token.response.dto';
+import { CreateTransactionDto } from './dto/create-transaction.dto';
+import { ESimPurchaseResponseDto } from './dto/esim-purchase-response.dto';
 import * as esimTopupResquestDto from './dto/esimtopup.resquest.dto';
+import type { InvoiceRequest } from './dto/invoice.request.dto';
+import { OrderEsimResponseDto } from './dto/order-esim-response.dto';
+import { OrderEsimDto } from './dto/order-esim.dto';
+import { PurchaseEsimDto } from './dto/purchase-esim.dto';
+import { QueryTransactionsDto } from './dto/query-transactions.dto';
+import {
+  TransactionListResponseDto,
+  TransactionResponseDto,
+} from './dto/transaction-response.dto';
+import { QpayConnectionService } from './services/qpay.connection.service';
+import { TransactionsService } from './transactions.service';
 
 @ApiTags('transactions')
 @Controller('transactions')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class TransactionsController {
+  private readonly logger = new Logger(TransactionsController.name);
+
   constructor(
     private readonly transactionsService: TransactionsService,
     private readonly qpayConnectionService: QpayConnectionService,
@@ -453,32 +456,51 @@ export class TransactionsController {
     const purchases: ESimPurchase[] =
       await this.transactionsService.getUserEsimPurchases(req.user.id);
 
-    return purchases.map((purchase: ESimPurchase) => ({
-      transaction: purchase.transaction
-        ? this.mapToResponseDto(
-            purchase.transaction as Transaction & {
-              esimPurchase?: ESimPurchase;
-            },
-          )
-        : null,
-      purchaseId: purchase.id,
-      packageCode: purchase.packageCode,
-      slug: purchase.slug,
-      packageName: purchase.packageName,
-      price: Number(purchase.price),
-      currency: purchase.currency,
-      dataVolume: Number(purchase.dataVolume),
-      duration: purchase.duration,
-      durationUnit: purchase.durationUnit,
-      location: purchase.location,
-      description: purchase.description,
-      iccid: purchase.iccid,
-      isActivated: purchase.isActivated,
-      isActive: purchase.isActive,
-      activatedAt: purchase.activatedAt,
-      expiresAt: purchase.expiresAt,
-      purchasedAt: purchase.createdAt,
-    }));
+    // Fetch transactions separately for user purchases (transactionId references Transaction.transactionId)
+    const purchasePromises = purchases.map(async (purchase: ESimPurchase) => {
+      let transaction: Transaction | null = null;
+      // Only fetch transaction for user purchases (where userId exists and transactionId references Transaction)
+      if (purchase.userId && purchase.transactionId) {
+        try {
+          transaction =
+            await this.transactionsService.getTransactionByTransactionId(
+              purchase.transactionId,
+            );
+        } catch (error) {
+          // Transaction not found, set to null
+          transaction = null;
+        }
+      }
+
+      return {
+        transaction: transaction
+          ? this.mapToResponseDto(
+              transaction as Transaction & {
+                esimPurchase?: ESimPurchase;
+              },
+            )
+          : null,
+        purchaseId: purchase.id,
+        packageCode: purchase.packageCode,
+        slug: purchase.slug,
+        packageName: purchase.packageName,
+        price: Number(purchase.price),
+        currency: purchase.currency,
+        dataVolume: Number(purchase.dataVolume),
+        duration: purchase.duration,
+        durationUnit: purchase.durationUnit,
+        location: purchase.location,
+        description: purchase.description,
+        iccid: purchase.iccid,
+        isActivated: purchase.isActivated,
+        isActive: purchase.isActive,
+        activatedAt: purchase.activatedAt,
+        expiresAt: purchase.expiresAt,
+        purchasedAt: purchase.createdAt,
+      };
+    });
+
+    return Promise.all(purchasePromises);
   }
 
   /**
@@ -514,10 +536,24 @@ export class TransactionsController {
         req.user.id,
       );
 
+    // Fetch transaction separately for user purchases (transactionId references Transaction.transactionId)
+    let transaction: Transaction | null = null;
+    if (purchase.userId && purchase.transactionId) {
+      try {
+        transaction =
+          await this.transactionsService.getTransactionByTransactionId(
+            purchase.transactionId,
+          );
+      } catch (error) {
+        // Transaction not found, set to null
+        transaction = null;
+      }
+    }
+
     return {
-      transaction: purchase.transaction
+      transaction: transaction
         ? this.mapToResponseDto(
-            purchase.transaction as Transaction & {
+            transaction as Transaction & {
               esimPurchase?: ESimPurchase;
             },
           )
@@ -594,7 +630,7 @@ export class TransactionsController {
   @Post('createInvoice')
   @ApiOperation({
     summary: 'Create QPay invoice',
-    description:"QPay-с нэхэмжлэл үүсгэх",
+    description: 'QPay-с нэхэмжлэл үүсгэх',
   })
   @ApiBody({ type: CreateTransactionDto })
   @ApiResponse({
@@ -615,66 +651,262 @@ export class TransactionsController {
     status: 404,
     description: 'User or wallet not found',
   })
-  async createInvoice(
-     @Request() req: InvoiceRequest,
-  ): Promise<any> {
+  async createInvoice(@Request() req: InvoiceRequest): Promise<unknown> {
     return await this.qpayConnectionService.createInvoice(req);
   }
 
   @Post('check/:invoiceId')
+  @Public()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Check QPay invoice status',
-    description: 'Нэхэмжлэл төлөгдсөн эсэхийг шалгах',
+    description:
+      'Нэхэмжлэл төлөгдсөн эсэхийг шалгах. If paid, automatically purchases the eSIM card.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Invoice status retrieved successfully',
+    description:
+      'Invoice status retrieved successfully. If paid, eSIM order is placed automatically.',
   })
   @ApiResponse({
     status: 400,
     description: 'Invalid invoice ID',
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing token',
   })
   @ApiResponse({
     status: 404,
     description: 'Invoice not found',
   })
   async checkInvoiceStatus(
-    @Request() req: AuthRequest,
-    @Param('invoiceId') invoiceId: string,
-  ): Promise<any> {
-    return await this.qpayConnectionService.checkInvoice(invoiceId);
+    @Param('invoiceId') qpayInvoiceId: string, // QPay invoice ID (external payment system ID)
+  ): Promise<Record<string, unknown>> {
+    // Check invoice status from QPay
+    const invoiceStatus = (await this.qpayConnectionService.checkInvoice(
+      qpayInvoiceId,
+    )) as {
+      count: number;
+      rows?: Array<{ payment_status: string }>;
+      [key: string]: unknown;
+    };
+
+    // Check if invoice is paid
+    const isPaid =
+      invoiceStatus.count > 0 &&
+      invoiceStatus.rows?.some(
+        (row: { payment_status: string }) => row.payment_status === 'PAID',
+      );
+
+    if (isPaid) {
+      // Find the EsimInvoice record by QPay invoice ID
+      // Note: qpayInvoiceId is the external QPay payment system ID
+      // esimInvoice.id is our internal database UUID
+      const esimInvoice =
+        await this.transactionsService.getEsimInvoiceByQpayId(qpayInvoiceId);
+
+      if (esimInvoice && esimInvoice.packageCode) {
+        // Check if already processed
+        if (
+          esimInvoice.status !== 'PROCESSED' &&
+          esimInvoice.status !== 'PAID'
+        ) {
+          try {
+            // Inquire eSIM package details from API using packageCode
+            this.logger.log(
+              `Fetching eSIM package details for packageCode: ${esimInvoice.packageCode}`,
+            );
+            const packages =
+              await this.transactionsService.getPackageDetailsByCode(
+                esimInvoice.packageCode,
+              );
+
+            if (!packages || packages.length === 0) {
+              throw new NotFoundException(
+                `Package not found for packageCode: ${esimInvoice.packageCode}`,
+              );
+            }
+
+            const packageDetails = packages[0];
+            if (!packageDetails) {
+              throw new NotFoundException(
+                `Package details not found for packageCode: ${esimInvoice.packageCode}`,
+              );
+            }
+
+            this.logger.log(
+              `Found package: ${packageDetails.name}, Price: ${packageDetails.price} ${packageDetails.currencyCode}`,
+            );
+
+            // Use price from API response (already in API format)
+            // API price is in units where 10000 = $1.00
+            const packagePrice = Number(packageDetails.price);
+
+            const orderEsimDto = {
+              transactionId: undefined, // Will be auto-generated (eSIM order transaction ID)
+              amount: packagePrice,
+              packageInfoList: [
+                {
+                  packageCode: esimInvoice.packageCode,
+                  count: 1,
+                  price: packagePrice,
+                },
+              ],
+            };
+
+            // Place eSIM order
+            // Note: orderEsimForCustomer already updates the invoice status to 'PAID'
+            // and creates ESimPurchase records, so no need to update status again
+            const orderResult =
+              await this.transactionsService.orderEsimForCustomer(
+                qpayInvoiceId, // Pass QPay invoice ID
+                orderEsimDto,
+              );
+
+            // Get orderNo from ESimPurchase records if available (more reliable)
+            let esimOrderNo = orderResult.orderNo;
+            try {
+              const purchases =
+                await this.transactionsService.getEsimPurchasesByInvoiceId(
+                  esimInvoice.id,
+                );
+              if (purchases.length > 0 && purchases[0].orderNo) {
+                esimOrderNo = purchases[0].orderNo;
+              }
+            } catch (error) {
+              // If we can't get from purchases, use orderResult.orderNo
+              this.logger.warn(
+                `Could not retrieve orderNo from purchases, using orderResult: ${error instanceof Error ? error.message : 'Unknown'}`,
+              );
+            }
+
+            return {
+              ...invoiceStatus,
+              orderPlaced: true,
+              orderNo: esimOrderNo || orderResult.orderNo || null,
+              transactionId: orderResult.transactionId,
+              message: 'Invoice paid and eSIM order placed successfully',
+            };
+          } catch (error) {
+            this.logger.error(
+              `Failed to place eSIM order for invoice (QPay ID: ${qpayInvoiceId}, Internal ID: ${esimInvoice.id}): ${error instanceof Error ? error.message : 'Unknown error'}`,
+            );
+
+            // Try to get orderNo from ESimPurchase records even if order failed
+            let esimOrderNo: string | null = null;
+            try {
+              const purchases =
+                await this.transactionsService.getEsimPurchasesByInvoiceId(
+                  esimInvoice.id,
+                );
+              if (purchases.length > 0 && purchases[0].orderNo) {
+                esimOrderNo = purchases[0].orderNo;
+              }
+            } catch {
+              // Ignore error, orderNo will be null
+            }
+
+            // Return invoice status even if order fails
+            return {
+              ...invoiceStatus,
+              orderPlaced: false,
+              orderNo: esimOrderNo || null,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : 'Failed to place eSIM order',
+              message: 'Invoice is paid but eSIM order failed',
+            };
+          }
+        } else {
+          // Already processed
+          const invoiceData = esimInvoice.invoiceData as
+            | { orderNo?: string }
+            | undefined;
+
+          // Try to get orderNo from ESimPurchase records
+          let esimOrderNo = invoiceData?.orderNo;
+          try {
+            const purchases =
+              await this.transactionsService.getEsimPurchasesByInvoiceId(
+                esimInvoice.id,
+              );
+            if (purchases.length > 0 && purchases[0].orderNo) {
+              esimOrderNo = purchases[0].orderNo;
+            }
+          } catch (error) {
+            // If we can't get from purchases, use invoiceData.orderNo
+            this.logger.warn(
+              `Could not retrieve orderNo from purchases for already processed invoice: ${error instanceof Error ? error.message : 'Unknown'}`,
+            );
+          }
+
+          return {
+            ...invoiceStatus,
+            orderPlaced: true,
+            alreadyProcessed: true,
+            orderNo: esimOrderNo || null,
+            message: 'Invoice already processed',
+          };
+        }
+      }
+    }
+
+    // Return invoice status (not paid or no invoice found)
+    // Try to get orderNo even if invoice not found or not paid
+    let esimOrderNo: string | null = null;
+    if (isPaid) {
+      try {
+        const esimInvoice =
+          await this.transactionsService.getEsimInvoiceByQpayId(qpayInvoiceId);
+        if (esimInvoice) {
+          // Try to get orderNo from ESimPurchase records
+          try {
+            const purchases =
+              await this.transactionsService.getEsimPurchasesByInvoiceId(
+                esimInvoice.id,
+              );
+            if (purchases.length > 0 && purchases[0].orderNo) {
+              esimOrderNo = purchases[0].orderNo;
+            } else {
+              // Try from invoiceData
+              const invoiceData = esimInvoice.invoiceData as
+                | { orderNo?: string }
+                | undefined;
+              if (invoiceData?.orderNo) {
+                esimOrderNo = invoiceData.orderNo;
+              }
+            }
+          } catch {
+            // Try from invoiceData as fallback
+            const invoiceData = esimInvoice.invoiceData as
+              | { orderNo?: string }
+              | undefined;
+            if (invoiceData?.orderNo) {
+              esimOrderNo = invoiceData.orderNo;
+            }
+          }
+        }
+      } catch {
+        // Ignore error, orderNo will be null
+      }
+    }
+
+    // Return invoice status (not paid or no invoice found)
+    return {
+      ...invoiceStatus,
+      orderPlaced: false,
+      orderNo: esimOrderNo || null,
+      message: isPaid
+        ? 'Invoice paid but no eSIM invoice found'
+        : 'Invoice not paid yet',
+    };
   }
 
-  @Post('order/esim')
+  @Post('order/esim-test')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Check QPay invoice status',
-    description: 'Нэхэмжлэл төлөгдсөн эсэхийг шалгах',
+    summary: 'Test eSIM order',
+    description: 'Test eSIM order without payment',
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Invoice status retrieved successfully',
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Invalid invoice ID',
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing token',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Invoice not found',
-  })
-  async orderEsim(
-    @Request() req: AuthRequest,
-  ): Promise<any> {
+  async testOrderEsim(): Promise<unknown> {
     return await this.qpayConnectionService.orderEsim();
   }
 
@@ -703,7 +935,7 @@ export class TransactionsController {
   async topupEsim(
     @Request() req: AuthRequest,
     @Body() body: esimTopupResquestDto.TopupEsim,
-  ): Promise<any> {
+  ): Promise<unknown> {
     return await this.qpayConnectionService.topupEsim(body);
   }
 }

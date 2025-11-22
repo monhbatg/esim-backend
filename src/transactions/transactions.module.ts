@@ -3,22 +3,33 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
 import { TransactionsService } from './transactions.service';
 import { TransactionsController } from './transactions.controller';
+import { CustomerTransactionsController } from './customer-transactions.controller';
+import { OpenEsimController } from './open-esim.controller';
 import { Transaction } from '../entities/transaction.entity';
 import { ESimPurchase } from '../entities/esim-purchase.entity';
+import { Customer } from '../entities/customer.entity';
+import { EsimInvoice } from '../entities/esim-invoice.entity';
 import { WalletModule } from '../wallet/wallet.module';
 import { AuthModule } from '../auth/auth.module';
 import { QpayConnectionService } from './services/qpay.connection.service';
-import { HttpModule } from '@nestjs/axios';
+import { SystemConfig } from '../entities/system-config.entity';
+import { InquiryModule } from '../inquiry/inquiry.module';
 
 @Module({
   imports: [
-    HttpModule,
-    TypeOrmModule.forFeature([Transaction, ESimPurchase]),
     HttpModule, // Import HttpModule for making API calls to eSIM Access
+    TypeOrmModule.forFeature([
+      Transaction,
+      ESimPurchase,
+      Customer,
+      EsimInvoice,
+      SystemConfig, // SystemConfig entity for QPay token caching
+    ]),
     WalletModule, // Import WalletModule to use WalletService
     forwardRef(() => AuthModule), // Import AuthModule to access TokenBlacklistService for JwtAuthGuard
+    forwardRef(() => InquiryModule), // Import InquiryModule to use InquiryPackagesService
   ],
-  controllers: [TransactionsController],
+  controllers: [TransactionsController, CustomerTransactionsController, OpenEsimController],
   providers: [TransactionsService, QpayConnectionService],
   exports: [TransactionsService, QpayConnectionService], // Export for use in other modules if needed
 })

@@ -1,29 +1,39 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+import { HttpService } from '@nestjs/axios';
 import {
-  Injectable,
-  NotFoundException,
   BadRequestException,
-  Logger,
+  forwardRef,
   HttpException,
   HttpStatus,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, In } from 'typeorm';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
 import { AxiosError } from 'axios';
-import { Transaction } from '../entities/transaction.entity';
+import { firstValueFrom } from 'rxjs';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
+import { Customer } from '../entities/customer.entity';
+import { EsimInvoice } from '../entities/esim-invoice.entity';
 import { ESimPurchase } from '../entities/esim-purchase.entity';
+import { Transaction } from '../entities/transaction.entity';
+import { CURRENCY_CONSTANTS } from '../marketplace/constants/currency.constants';
+import {
+  TransactionStatus,
+  TransactionType,
+} from '../users/dto/transaction-types.enum';
 import { WalletService } from '../wallet/wallet.service';
+import { InquiryPackagesService } from '../inquiry/services/inquiry.packages.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
+import { CustomerPurchaseDto } from './dto/customer-purchase.dto';
+import { OrderEsimDto } from './dto/order-esim.dto';
 import { PurchaseEsimDto } from './dto/purchase-esim.dto';
 import { QueryTransactionsDto } from './dto/query-transactions.dto';
-import { OrderEsimDto } from './dto/order-esim.dto';
-import {
-  TransactionType,
-  TransactionStatus,
-} from '../users/dto/transaction-types.enum';
-import { CURRENCY_CONSTANTS } from '../marketplace/constants/currency.constants';
+import { QueryEsimDto } from './dto/query-esim.dto';
+import { QpayConnectionService } from './services/qpay.connection.service';
 
 @Injectable()
 export class TransactionsService {
@@ -37,9 +47,16 @@ export class TransactionsService {
     private readonly transactionRepository: Repository<Transaction>,
     @InjectRepository(ESimPurchase)
     private readonly esimPurchaseRepository: Repository<ESimPurchase>,
+    @InjectRepository(Customer)
+    private readonly customerRepository: Repository<Customer>,
+    @InjectRepository(EsimInvoice)
+    private readonly esimInvoiceRepository: Repository<EsimInvoice>,
     private readonly walletService: WalletService,
     private readonly dataSource: DataSource,
     private readonly httpService: HttpService,
+    private readonly qpayConnectionService: QpayConnectionService,
+    @Inject(forwardRef(() => InquiryPackagesService))
+    private readonly inquiryPackagesService: InquiryPackagesService,
   ) {}
 
   /**
@@ -95,7 +112,7 @@ export class TransactionsService {
       let wallet;
       try {
         wallet = await this.walletService.getWallet(userId);
-      } catch (error) {
+      } catch {
         // If wallet still doesn't exist (shouldn't happen), create it by getting balance again
         await this.walletService.getBalance(userId);
         wallet = await this.walletService.getWallet(userId);
@@ -415,7 +432,6 @@ export class TransactionsService {
     return await this.esimPurchaseRepository.find({
       where: { userId },
       order: { createdAt: 'DESC' },
-      relations: ['transaction'],
     });
   }
 
@@ -437,7 +453,7 @@ export class TransactionsService {
 
     const purchase = await this.esimPurchaseRepository.findOne({
       where,
-      relations: ['transaction', 'user'],
+      relations: ['user'],
     });
 
     if (!purchase) {
@@ -460,14 +476,15 @@ export class TransactionsService {
     return await this.esimPurchaseRepository.find({
       where: { userId, packageCode },
       order: { createdAt: 'DESC' },
-      relations: ['transaction'],
     });
   }
 
   /**
    * Get eSIM purchase by transaction ID
+   * Note: For user purchases, this returns the purchase linked to the Transaction.
+   * For customer purchases, transactionId is unique per SIM, so this will return one purchase.
    * @param transactionId - The transaction ID
-   * @param userId - Optional user ID to ensure ownership
+   * @param userId - Optional user ID to ensure ownership (only for user purchases)
    * @returns The eSIM purchase or null if not found
    */
   async getEsimPurchaseByTransactionId(
@@ -481,7 +498,21 @@ export class TransactionsService {
 
     return await this.esimPurchaseRepository.findOne({
       where,
-      relations: ['transaction'],
+    });
+  }
+
+  /**
+   * Get eSIM purchases by invoice ID (for customer purchases)
+   * @param invoiceId - The invoice ID
+   * @returns List of eSIM purchases for this invoice
+   */
+  async getEsimPurchasesByInvoiceId(
+    invoiceId: string,
+  ): Promise<ESimPurchase[]> {
+    return await this.esimPurchaseRepository.find({
+      where: { invoiceId },
+      order: { createdAt: 'DESC' },
+      relations: ['customer'],
     });
   }
 
@@ -827,6 +858,1449 @@ export class TransactionsService {
 
       // Re-throw the error so it can be handled by the controller
       throw error;
+    }
+  }
+
+  /**
+   * Process customer purchase
+   * 1. Create/Find Customer
+   * 2. Create QPay Invoice
+   * 3. Save EsimInvoice
+   */
+  async processCustomerPurchase(dto: CustomerPurchaseDto): Promise<any> {
+    // 1. Find or Create Customer
+    let customer = await this.customerRepository.findOne({
+      where: { phoneNumber: dto.phoneNumber },
+    });
+
+    if (!customer) {
+      customer = this.customerRepository.create({
+        phoneNumber: dto.phoneNumber,
+        email: dto.email,
+      });
+      customer = await this.customerRepository.save(customer);
+    } else {
+      // Update email if changed
+      if (dto.email && customer.email !== dto.email) {
+        customer.email = dto.email;
+        customer = await this.customerRepository.save(customer);
+      }
+    }
+
+    // 2. Create QPay Invoice
+    // Generate unique sender_invoice_no
+    const senderInvoiceNo = `CUSTOMER-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+    const invoiceRequest: any = {
+      sender_invoice_no: senderInvoiceNo,
+      invoice_receiver_code: dto.phoneNumber,
+      invoice_description: dto.description || 'Customer eSIM Purchase',
+      amount: dto.amount,
+      callback_url: `${process.env.API_URL || 'http://localhost:3000'}/customer/transactions/callback/${senderInvoiceNo}`,
+      invoice_receiver_data: {
+        register: '',
+        name: dto.email.split('@')[0],
+        email: dto.email,
+        phone: dto.phoneNumber,
+      },
+    };
+
+    const qpayResponse =
+      await this.qpayConnectionService.createInvoice(invoiceRequest);
+
+    // 3. Save EsimInvoice
+    const esimInvoice = this.esimInvoiceRepository.create({
+      amount: dto.amount,
+      senderInvoiceNo: senderInvoiceNo,
+      qpayInvoiceId: qpayResponse.invoice_id,
+      status: 'PENDING',
+      customer: customer,
+      invoiceData: qpayResponse,
+      packageCode: dto.packageCode,
+    });
+
+    await this.esimInvoiceRepository.save(esimInvoice);
+
+    return {
+      ...qpayResponse,
+      customerId: customer.id,
+      internalInvoiceId: esimInvoice.id,
+    };
+  }
+
+  /**
+   * Order eSIM for customer purchase (without wallet deduction)
+   * Used when invoice is paid via QPay
+   * @param qpayInvoiceId - The QPay invoice ID (from QPay payment system)
+   * @param orderEsimDto - Order details
+   * @returns Order response with orderNo
+   */
+  async orderEsimForCustomer(
+    qpayInvoiceId: string,
+    orderEsimDto: OrderEsimDto,
+  ): Promise<{
+    orderNo: string;
+    transactionId: string;
+    amount: number;
+  }> {
+    // Validate access code is configured
+    if (!this.accessCode) {
+      this.logger.error('ESIM_ACCESS_CODE is not configured');
+      throw new BadRequestException('eSIM service is not properly configured');
+    }
+
+    // Generate eSIM order transaction ID if not provided
+    // This is used for the eSIM API order, not the same as Transaction entity
+    let esimOrderTransactionId = orderEsimDto.transactionId;
+    if (!esimOrderTransactionId) {
+      esimOrderTransactionId = this.generateTransactionId();
+      // Ensure uniqueness (retry if collision - extremely rare)
+      let attempts = 0;
+      while (
+        (await this.transactionRepository.findOne({
+          where: { transactionId: esimOrderTransactionId },
+        })) &&
+        attempts < 10
+      ) {
+        esimOrderTransactionId = this.generateTransactionId();
+        attempts++;
+      }
+    }
+
+    // Find the EsimInvoice by QPay invoice ID
+    // Note: qpayInvoiceId is the external QPay system ID, esimInvoice.id is our internal database ID
+    const esimInvoice = await this.esimInvoiceRepository.findOne({
+      where: { qpayInvoiceId: qpayInvoiceId },
+      relations: ['customer'],
+    });
+
+    if (!esimInvoice) {
+      throw new NotFoundException(
+        `Invoice not found for QPay invoice ID: ${qpayInvoiceId}`,
+      );
+    }
+
+    // Check if already processed
+    if (esimInvoice.status === 'PROCESSED' || esimInvoice.status === 'PAID') {
+      this.logger.log(
+        `Invoice (QPay ID: ${qpayInvoiceId}, Internal ID: ${esimInvoice.id}) already processed, skipping order`,
+      );
+      // Return existing order data if available
+      if (esimInvoice.invoiceData?.orderNo) {
+        return {
+          orderNo: esimInvoice.invoiceData.orderNo,
+          transactionId:
+            esimInvoice.invoiceData.transactionId || esimOrderTransactionId,
+          amount: esimInvoice.amount,
+        };
+      }
+      throw new BadRequestException('Invoice already processed');
+    }
+
+    try {
+      // Prepare request body for eSIM Access API
+      const requestBody: any = {
+        transactionId: esimOrderTransactionId,
+        amount: orderEsimDto.amount,
+        packageInfoList: orderEsimDto.packageInfoList.map((pkg) => ({
+          packageCode: pkg.packageCode,
+          count: pkg.count,
+          price: pkg.price,
+        })),
+      };
+
+      // Call eSIM Access API to place order
+      const url = `${this.apiBaseUrl}/open/esim/order`;
+      this.logger.log(
+        `Placing eSIM order for customer invoice (QPay ID: ${qpayInvoiceId}, Internal ID: ${esimInvoice.id}), eSIM Order TransactionId: ${esimOrderTransactionId}`,
+      );
+
+      let orderResponse: any;
+      try {
+        const response = await firstValueFrom(
+          this.httpService.post(url, requestBody, {
+            headers: {
+              'RT-AccessCode': this.accessCode,
+              'Content-Type': 'application/json',
+            },
+            timeout: 30000, // 30 seconds timeout for order API
+          }),
+        );
+
+        orderResponse = response.data;
+        this.logger.log(
+          `eSIM order API response received for invoice (QPay ID: ${qpayInvoiceId}, Internal ID: ${esimInvoice.id})`,
+        );
+      } catch (error) {
+        const axiosError = error as AxiosError;
+        this.logger.error(
+          `eSIM order API call failed for invoice (QPay ID: ${qpayInvoiceId}, Internal ID: ${esimInvoice.id}): ${axiosError.message}`,
+          axiosError.stack,
+        );
+
+        // Extract error message from response if available
+        let errorMessage = 'Failed to place eSIM order';
+        if (axiosError.response?.data) {
+          const errorData = axiosError.response.data as any;
+          errorMessage =
+            errorData.errorMsg ||
+            errorData.message ||
+            `API Error: ${axiosError.response.status}`;
+        } else if (
+          axiosError.code === 'ECONNABORTED' ||
+          axiosError.message.includes('timeout')
+        ) {
+          errorMessage = 'eSIM provider API request timed out';
+        }
+
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.BAD_REQUEST,
+            message: errorMessage,
+            error: 'eSIM Order Failed',
+          },
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      // Validate API response
+      if (!orderResponse || !orderResponse.success) {
+        const errorMsg =
+          orderResponse?.errorMsg ||
+          'Order failed - invalid response from eSIM provider';
+        this.logger.error(
+          `eSIM order failed for invoice (QPay ID: ${qpayInvoiceId}, Internal ID: ${esimInvoice.id}): ${errorMsg}`,
+          JSON.stringify(orderResponse),
+        );
+
+        throw new BadRequestException(errorMsg);
+      }
+
+      // Extract order number from response
+      const orderNo = orderResponse.obj?.orderNo || orderResponse.orderNo;
+      if (!orderNo) {
+        this.logger.error(
+          `Order response missing orderNo for invoice (QPay ID: ${qpayInvoiceId}, Internal ID: ${esimInvoice.id})`,
+          JSON.stringify(orderResponse),
+        );
+
+        throw new BadRequestException('Order response missing order number');
+      }
+
+      // Update EsimInvoice with order details and mark as paid (order completed)
+      // Status is set to 'PAID' since the order is placed synchronously and completes immediately
+      esimInvoice.status = 'PAID';
+      const orderResponseData = orderResponse.obj || orderResponse;
+      esimInvoice.invoiceData = {
+        ...esimInvoice.invoiceData,
+        orderNo,
+        transactionId: esimOrderTransactionId, // Store eSIM order transaction ID
+        esimOrderResponse: orderResponseData,
+        processedAt: new Date().toISOString(),
+      };
+
+      // Use a database transaction to ensure invoice is saved and committed
+      // before creating purchases. This prevents foreign key constraint violations.
+      await this.dataSource.transaction(async (manager) => {
+        // Save invoice within transaction
+        const invoiceRepository = manager.getRepository(EsimInvoice);
+        const savedInvoice = await invoiceRepository.save(esimInvoice);
+
+        // Reload invoice with customer relation within the same transaction
+        const invoiceWithCustomer = await invoiceRepository.findOne({
+          where: { id: savedInvoice.id },
+          relations: ['customer'],
+        });
+
+        if (!invoiceWithCustomer) {
+          throw new Error(
+            `Failed to reload invoice ${savedInvoice.id} after saving`,
+          );
+        }
+
+        if (!invoiceWithCustomer.customer) {
+          throw new Error(
+            `Invoice ${invoiceWithCustomer.id} does not have a customer relation`,
+          );
+        }
+
+        // Create purchases within the same transaction
+        // This ensures the invoice exists when purchases are created
+        try {
+          await this.createEsimPurchasesInTransaction(
+            orderResponseData,
+            invoiceWithCustomer,
+            esimOrderTransactionId,
+            orderEsimDto,
+            manager,
+          );
+        } catch (purchaseError) {
+          this.logger.error(
+            `Failed to create ESimPurchase records in transaction: ${purchaseError instanceof Error ? purchaseError.message : 'Unknown error'}`,
+            purchaseError instanceof Error ? purchaseError.stack : undefined,
+          );
+          // Don't throw - let transaction complete, purchases can be created later via fallback
+        }
+      });
+
+      // Try fallback method if transaction completed but purchases weren't created
+      // This handles cases where the transaction succeeded but purchase creation failed
+      try {
+        const invoiceCheck = await this.esimInvoiceRepository.findOne({
+          where: { id: esimInvoice.id },
+          relations: ['customer'],
+        });
+
+        if (invoiceCheck && invoiceCheck.customer) {
+          const existingPurchases = await this.esimPurchaseRepository.count({
+            where: { invoiceId: invoiceCheck.id },
+          });
+
+          if (existingPurchases === 0) {
+            this.logger.log(
+              `No purchases found for invoice ${invoiceCheck.id}, attempting fallback creation`,
+            );
+            // Try to get esimTranNo and iccid from invoice data (stored in esimOrderResponse)
+            const esimTranNo =
+              invoiceCheck.invoiceData?.esimOrderResponse?.esimTranNo ||
+              invoiceCheck.invoiceData?.esimOrderResponse?.obj?.esimTranNo ||
+              null;
+            const iccid =
+              invoiceCheck.invoiceData?.esimOrderResponse?.iccid ||
+              invoiceCheck.invoiceData?.esimOrderResponse?.obj?.iccid ||
+              null;
+
+            await this.createPurchasesFromPackageInfo(
+              invoiceCheck,
+              esimOrderTransactionId,
+              orderEsimDto,
+              invoiceCheck.invoiceData?.orderNo || null,
+              esimTranNo,
+              iccid,
+            );
+          }
+        }
+      } catch (fallbackError) {
+        this.logger.error(
+          `Fallback purchase creation also failed: ${fallbackError instanceof Error ? fallbackError.message : 'Unknown'}`,
+        );
+      }
+
+      this.logger.log(
+        `eSIM order successful for customer invoice (QPay ID: ${qpayInvoiceId}, Internal ID: ${esimInvoice.id}), OrderNo: ${orderNo}, eSIM Order TransactionId: ${esimOrderTransactionId}`,
+      );
+
+      return {
+        orderNo,
+        transactionId: esimOrderTransactionId,
+        amount: orderEsimDto.amount,
+      };
+    } catch (error) {
+      this.logger.error(
+        `eSIM order failed for invoice (QPay ID: ${qpayInvoiceId}, Internal ID: ${esimInvoice.id}): ${error instanceof Error ? error.message : 'Unknown'}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Get EsimInvoice by QPay invoice ID
+   * @param qpayInvoiceId - The QPay invoice ID
+   * @returns The EsimInvoice or null if not found
+   */
+  async getEsimInvoiceByQpayId(
+    qpayInvoiceId: string,
+  ): Promise<EsimInvoice | null> {
+    return await this.esimInvoiceRepository.findOne({
+      where: { qpayInvoiceId },
+      relations: ['customer'],
+    });
+  }
+
+  /**
+   * Get package details by packageCode from eSIM API
+   * @param packageCode - The package code to search for
+   * @returns Array of matching packages
+   */
+  async getPackageDetailsByCode(packageCode: string): Promise<
+    Array<{
+      packageCode: string;
+      name: string;
+      price: number;
+      currencyCode: string;
+      [key: string]: unknown;
+    }>
+  > {
+    try {
+      this.logger.log(
+        `Fetching package details for packageCode: ${packageCode}`,
+      );
+      const packages = await this.inquiryPackagesService.getPackagesByFilters({
+        packageCode,
+      });
+      return packages as unknown as Array<{
+        packageCode: string;
+        name: string;
+        price: number;
+        currencyCode: string;
+        [key: string]: unknown;
+      }>;
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch package details for ${packageCode}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Update EsimInvoice status
+   * @param invoiceId - The internal invoice ID
+   * @param status - The new status
+   */
+  async updateEsimInvoiceStatus(
+    invoiceId: string,
+    status: string,
+  ): Promise<void> {
+    await this.esimInvoiceRepository.update({ id: invoiceId }, { status });
+  }
+
+  /**
+   * Create ESimPurchase records within a database transaction
+   * This ensures the invoice exists when purchases are created
+   * @param orderResponseData - The order response data from eSIM API
+   * @param esimInvoice - The invoice record (contains internal invoice ID and QPay invoice ID)
+   * @param esimOrderTransactionId - The eSIM order transaction ID (used for eSIM API, not Transaction entity)
+   * @param orderEsimDto - The order DTO with package info
+   * @param manager - The EntityManager from the transaction
+   */
+  private async createEsimPurchasesInTransaction(
+    orderResponseData: any,
+    esimInvoice: EsimInvoice,
+    esimOrderTransactionId: string,
+    orderEsimDto: OrderEsimDto,
+    manager: EntityManager,
+  ): Promise<void> {
+    const purchaseRepository = manager.getRepository(ESimPurchase);
+    const customerRepository = manager.getRepository(Customer);
+
+    try {
+      // Extract SIM list from order response
+      const simList =
+        orderResponseData.esimList ||
+        orderResponseData.obj?.esimList ||
+        orderResponseData.list ||
+        orderResponseData.obj?.list ||
+        orderResponseData.data?.esimList ||
+        orderResponseData.data?.list ||
+        [];
+
+      this.logger.log(
+        `Found SIM list with ${Array.isArray(simList) ? simList.length : 0} items for invoice ${esimInvoice.id}`,
+      );
+
+      // Verify invoice and customer exist in the transaction
+      const invoiceCheck = await manager.findOne(EsimInvoice, {
+        where: { id: esimInvoice.id },
+        relations: ['customer'],
+      });
+
+      if (!invoiceCheck) {
+        throw new Error(`Invoice ${esimInvoice.id} not found in transaction`);
+      }
+
+      const customer = invoiceCheck.customer;
+      if (!customer) {
+        throw new Error(`Invoice ${invoiceCheck.id} has no customer`);
+      }
+
+      const customerCheck = await customerRepository.findOne({
+        where: { id: customer.id },
+      });
+
+      if (!customerCheck) {
+        throw new Error(`Customer ${customer.id} not found in transaction`);
+      }
+
+      // If no SIM list found, create purchases based on package info
+      if (!Array.isArray(simList) || simList.length === 0) {
+        this.logger.warn(
+          `No SIM cards found in order response for invoice ${esimInvoice.id}. Creating purchases from package info.`,
+        );
+        // Try to extract esimTranNo and iccid from order response (might be at top level or in first SIM item)
+        const esimTranNo =
+          orderResponseData.esimTranNo ||
+          orderResponseData.obj?.esimTranNo ||
+          null;
+        const iccid =
+          orderResponseData.iccid ||
+          orderResponseData.obj?.iccid ||
+          (Array.isArray(simList) && simList.length > 0
+            ? simList[0]?.iccid
+            : null) ||
+          null;
+
+        await this.createPurchasesFromPackageInfoInTransaction(
+          invoiceCheck,
+          customerCheck,
+          esimOrderTransactionId,
+          orderEsimDto,
+          purchaseRepository,
+          orderResponseData.orderNo || null,
+          esimTranNo,
+          iccid,
+        );
+        return;
+      }
+
+      // Create a map of package codes to package info
+      const packageInfoMap = new Map<
+        string,
+        OrderEsimDto['packageInfoList'][0]
+      >();
+      orderEsimDto.packageInfoList.forEach((pkg) => {
+        packageInfoMap.set(pkg.packageCode, pkg);
+      });
+
+      // Process each SIM card
+      const purchasePromises = simList.map(async (simItem: any) => {
+        try {
+          const iccid = simItem.iccid || null;
+          const activationCode = simItem.ac || simItem.activationCode || null;
+          const qrCodeUrl = simItem.qrCodeUrl || simItem.shortUrl || null;
+
+          let packageCode = simItem.packageCode;
+          if (
+            !packageCode &&
+            simItem.packageList &&
+            simItem.packageList.length > 0
+          ) {
+            packageCode = simItem.packageList[0].packageCode;
+          }
+
+          if (!packageCode) {
+            this.logger.warn(
+              `No package code found for SIM item, skipping: ${JSON.stringify(simItem)}`,
+            );
+            return null;
+          }
+
+          // Get package details
+          let packageDetails: any = null;
+          try {
+            const packages =
+              await this.inquiryPackagesService.getPackagesByFilters({
+                packageCode,
+              });
+            if (packages && packages.length > 0) {
+              packageDetails = packages[0];
+            }
+          } catch (error) {
+            this.logger.warn(
+              `Failed to fetch package details for ${packageCode}: ${error instanceof Error ? error.message : 'Unknown'}`,
+            );
+          }
+
+          const packageInfo = packageInfoMap.get(packageCode);
+
+          // Verify invoice exists in transaction before creating purchase
+          const finalInvoiceCheck = await manager.findOne(EsimInvoice, {
+            where: { id: invoiceCheck.id },
+          });
+
+          if (!finalInvoiceCheck) {
+            this.logger.error(
+              `Invoice ${invoiceCheck.id} not found when creating purchase. Skipping.`,
+            );
+            return null;
+          }
+
+          const purchaseData: Partial<ESimPurchase> = {
+            customerId: customerCheck.id,
+            invoiceId: finalInvoiceCheck.id,
+            transactionId: `${esimOrderTransactionId}-${iccid || Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            orderNo: orderResponseData.orderNo || null,
+            esimTranNo: simItem.esimTranNo || null,
+            packageCode: packageCode,
+            slug: packageDetails?.slug || '',
+            packageName:
+              packageDetails?.name ||
+              packageDetails?.packageName ||
+              `Package ${packageCode}`,
+            price: packageInfo?.price || invoiceCheck.amount / simList.length,
+            currency: packageDetails?.currencyCode || 'MNT',
+            dataVolume: packageDetails?.volume || simItem.totalVolume || 0,
+            duration: packageDetails?.duration || simItem.totalDuration || 0,
+            durationUnit:
+              packageDetails?.durationUnit || simItem.durationUnit || 'DAY',
+            location: packageDetails?.location || '',
+            description: packageDetails?.description || null,
+            iccid: iccid,
+            activationCode: activationCode || qrCodeUrl,
+            isActivated: simItem.activateTime ? true : false,
+            isActive: true,
+            packageMetadata: {
+              ...packageDetails,
+              orderNo: orderResponseData.orderNo,
+              esimTranNo: simItem.esimTranNo,
+              qrCodeUrl: qrCodeUrl,
+              imsi: simItem.imsi,
+              msisdn: simItem.msisdn,
+              smdpStatus: simItem.smdpStatus,
+              eid: simItem.eid,
+              activateTime: simItem.activateTime,
+              expiredTime: simItem.expiredTime,
+              installationTime: simItem.installationTime,
+              esimStatus: simItem.esimStatus,
+            },
+          };
+
+          if (purchaseData.duration && purchaseData.durationUnit) {
+            purchaseData.expiresAt = this.calculateExpirationDate(
+              purchaseData.duration,
+              purchaseData.durationUnit,
+            );
+          } else if (simItem.expiredTime) {
+            purchaseData.expiresAt = new Date(simItem.expiredTime);
+          }
+
+          if (simItem.activateTime) {
+            purchaseData.activatedAt = new Date(simItem.activateTime);
+          }
+
+          const esimPurchase = purchaseRepository.create(purchaseData);
+          return await purchaseRepository.save(esimPurchase);
+        } catch (error) {
+          this.logger.error(
+            `Failed to create purchase record for SIM item: ${error instanceof Error ? error.message : 'Unknown'}`,
+            error instanceof Error ? error.stack : undefined,
+          );
+          return null;
+        }
+      });
+
+      const purchases = await Promise.all(purchasePromises);
+      const successfulPurchases = purchases.filter((p) => p !== null);
+
+      this.logger.log(
+        `Created ${successfulPurchases.length} ESimPurchase records in transaction for invoice ${esimInvoice.id}`,
+      );
+
+      // If no purchases created, try fallback
+      if (successfulPurchases.length === 0) {
+        this.logger.warn(
+          `No purchases created from SIM list. Attempting fallback for invoice ${esimInvoice.id}`,
+        );
+        // Try to extract esimTranNo and iccid from order response (might be at top level or in first SIM item)
+        const esimTranNo =
+          orderResponseData.esimTranNo ||
+          orderResponseData.obj?.esimTranNo ||
+          (Array.isArray(simList) && simList.length > 0
+            ? simList[0]?.esimTranNo
+            : null) ||
+          null;
+        const iccid =
+          orderResponseData.iccid ||
+          orderResponseData.obj?.iccid ||
+          (Array.isArray(simList) && simList.length > 0
+            ? simList[0]?.iccid
+            : null) ||
+          null;
+
+        await this.createPurchasesFromPackageInfoInTransaction(
+          invoiceCheck,
+          customerCheck,
+          esimOrderTransactionId,
+          orderEsimDto,
+          purchaseRepository,
+          orderResponseData.orderNo || null,
+          esimTranNo,
+          iccid,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to create ESimPurchase records in transaction: ${error instanceof Error ? error.message : 'Unknown'}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Create ESimPurchase records from package info within a transaction (fallback method)
+   */
+  private async createPurchasesFromPackageInfoInTransaction(
+    esimInvoice: EsimInvoice,
+    customer: Customer,
+    esimOrderTransactionId: string,
+    orderEsimDto: OrderEsimDto,
+    purchaseRepository: Repository<ESimPurchase>,
+    orderNo: string | null = null,
+    esimTranNo: string | null = null,
+    iccid: string | null = null,
+  ): Promise<void> {
+    const purchasePromises = orderEsimDto.packageInfoList.map(
+      async (packageInfo, index) => {
+        try {
+          let packageDetails: any = null;
+          try {
+            const packages =
+              await this.inquiryPackagesService.getPackagesByFilters({
+                packageCode: packageInfo.packageCode,
+              });
+            if (packages && packages.length > 0) {
+              packageDetails = packages[0];
+            }
+          } catch (error) {
+            this.logger.warn(
+              `Failed to fetch package details for ${packageInfo.packageCode}: ${error instanceof Error ? error.message : 'Unknown'}`,
+            );
+          }
+
+          const purchases = [];
+          for (let i = 0; i < packageInfo.count; i++) {
+            // Verify invoice exists in transaction
+            const invoiceCheck = await purchaseRepository.manager.findOne(
+              EsimInvoice,
+              {
+                where: { id: esimInvoice.id },
+              },
+            );
+
+            if (!invoiceCheck) {
+              this.logger.error(
+                `Invoice ${esimInvoice.id} not found in transaction when creating purchase ${i + 1} of ${packageInfo.count}. Skipping.`,
+              );
+              continue;
+            }
+
+            const purchaseData: Partial<ESimPurchase> = {
+              customerId: customer.id,
+              invoiceId: invoiceCheck.id,
+              transactionId: esimOrderTransactionId,
+              orderNo: orderNo,
+              esimTranNo: esimTranNo, // Extracted from order response when available
+              packageCode: packageInfo.packageCode,
+              slug: packageDetails?.slug || '',
+              packageName:
+                packageDetails?.name ||
+                packageDetails?.packageName ||
+                `Package ${packageInfo.packageCode}`,
+              price: packageInfo.price,
+              currency: packageDetails?.currencyCode || 'MNT',
+              dataVolume: packageDetails?.volume || 0,
+              duration: packageDetails?.duration || 0,
+              durationUnit: packageDetails?.durationUnit || 'DAY',
+              location: packageDetails?.location || '',
+              description: packageDetails?.description || null,
+              iccid: iccid, // Extracted from order response when available
+              activationCode: null,
+              isActivated: false,
+              isActive: true,
+              packageMetadata: packageDetails || null,
+            };
+
+            if (purchaseData.duration && purchaseData.durationUnit) {
+              purchaseData.expiresAt = this.calculateExpirationDate(
+                purchaseData.duration,
+                purchaseData.durationUnit,
+              );
+            }
+
+            const esimPurchase = purchaseRepository.create(purchaseData);
+            purchases.push(await purchaseRepository.save(esimPurchase));
+          }
+
+          return purchases;
+        } catch (error) {
+          this.logger.error(
+            `Failed to create purchase for package ${packageInfo.packageCode}: ${error instanceof Error ? error.message : 'Unknown'}`,
+          );
+          return [];
+        }
+      },
+    );
+
+    const allPurchases = await Promise.all(purchasePromises);
+    const totalPurchases = allPurchases.flat().length;
+
+    this.logger.log(
+      `Created ${totalPurchases} ESimPurchase records from package info in transaction for invoice ${esimInvoice.id}`,
+    );
+  }
+
+  /**
+   * Create ESimPurchase records from order response
+   * Parses the order response and creates purchase records for each SIM card
+   * @param orderResponseData - The order response data from eSIM API
+   * @param esimInvoice - The invoice record (contains internal invoice ID and QPay invoice ID)
+   * @param esimOrderTransactionId - The eSIM order transaction ID (used for eSIM API, not Transaction entity)
+   * @param orderEsimDto - The order DTO with package info
+   */
+  private async createEsimPurchasesFromOrderResponse(
+    orderResponseData: any,
+    esimInvoice: EsimInvoice,
+    esimOrderTransactionId: string,
+    orderEsimDto: OrderEsimDto,
+  ): Promise<void> {
+    try {
+      // Log the full order response structure for debugging
+      this.logger.log(
+        `Creating ESimPurchase records for invoice ${esimInvoice.id}. Order response keys: ${Object.keys(orderResponseData).join(', ')}`,
+      );
+      if (orderResponseData.obj) {
+        this.logger.log(
+          `Order response obj keys: ${Object.keys(orderResponseData.obj).join(', ')}`,
+        );
+      }
+
+      // Extract SIM list from order response
+      // The response structure may vary, try common patterns
+      const simList =
+        orderResponseData.esimList ||
+        orderResponseData.obj?.esimList ||
+        orderResponseData.list ||
+        orderResponseData.obj?.list ||
+        orderResponseData.data?.esimList ||
+        orderResponseData.data?.list ||
+        [];
+
+      this.logger.log(
+        `Found SIM list with ${Array.isArray(simList) ? simList.length : 0} items for invoice ${esimInvoice.id}`,
+      );
+
+      // Ensure invoice is saved and has an ID
+      if (!esimInvoice.id) {
+        this.logger.error(
+          `Invoice does not have an ID, cannot create purchases. Invoice: ${JSON.stringify(esimInvoice)}`,
+        );
+        return;
+      }
+
+      // Reload invoice from database to ensure it exists and is fresh
+      const existingInvoice = await this.esimInvoiceRepository.findOne({
+        where: { id: esimInvoice.id },
+        relations: ['customer'],
+      });
+
+      if (!existingInvoice) {
+        this.logger.error(
+          `Invoice with ID ${esimInvoice.id} does not exist in database, cannot create purchases`,
+        );
+        return;
+      }
+
+      // Get customer from verified invoice
+      const customer = existingInvoice.customer;
+      if (!customer) {
+        this.logger.warn(
+          `No customer found for invoice ${existingInvoice.id}, skipping purchase creation`,
+        );
+        return;
+      }
+
+      // Verify customer exists in database
+      const existingCustomer = await this.customerRepository.findOne({
+        where: { id: customer.id },
+      });
+
+      if (!existingCustomer) {
+        this.logger.error(
+          `Customer with ID ${customer.id} does not exist in database, cannot create purchases`,
+        );
+        return;
+      }
+
+      // If no SIM list found, create purchases based on package info from order DTO
+      // This handles cases where the API doesn't return SIM details immediately
+      if (!Array.isArray(simList) || simList.length === 0) {
+        this.logger.warn(
+          `No SIM cards found in order response for invoice ${existingInvoice.id}. Creating purchases from package info.`,
+        );
+
+        // Create purchases from package info list
+        // Try to extract esimTranNo and iccid from order response
+        const esimTranNo =
+          orderResponseData.esimTranNo ||
+          orderResponseData.obj?.esimTranNo ||
+          null;
+        const iccid =
+          orderResponseData.iccid ||
+          orderResponseData.obj?.iccid ||
+          (Array.isArray(simList) && simList.length > 0
+            ? simList[0]?.iccid
+            : null) ||
+          null;
+
+        await this.createPurchasesFromPackageInfo(
+          existingInvoice,
+          esimOrderTransactionId,
+          orderEsimDto,
+          orderResponseData.orderNo || orderResponseData.obj?.orderNo || null,
+          esimTranNo,
+          iccid,
+        );
+        return;
+      }
+
+      // Create a map of package codes to package info for quick lookup
+      const packageInfoMap = new Map<
+        string,
+        OrderEsimDto['packageInfoList'][0]
+      >();
+      orderEsimDto.packageInfoList.forEach((pkg) => {
+        packageInfoMap.set(pkg.packageCode, pkg);
+      });
+
+      // Process each SIM card
+      const purchasePromises = simList.map(async (simItem: any) => {
+        try {
+          // Extract SIM card details
+          const iccid = simItem.iccid || null;
+          const activationCode = simItem.ac || simItem.activationCode || null;
+          const qrCodeUrl = simItem.qrCodeUrl || simItem.shortUrl || null;
+
+          // Get package code from SIM item or package list
+          let packageCode = simItem.packageCode;
+          if (
+            !packageCode &&
+            simItem.packageList &&
+            simItem.packageList.length > 0
+          ) {
+            packageCode = simItem.packageList[0].packageCode;
+          }
+
+          if (!packageCode) {
+            this.logger.warn(
+              `No package code found for SIM item, skipping: ${JSON.stringify(simItem)}`,
+            );
+            return null;
+          }
+
+          // Get package details from inquiry service
+          let packageDetails: any = null;
+          try {
+            const packages =
+              await this.inquiryPackagesService.getPackagesByFilters({
+                packageCode,
+              });
+            if (packages && packages.length > 0) {
+              packageDetails = packages[0];
+            }
+          } catch (error) {
+            this.logger.warn(
+              `Failed to fetch package details for ${packageCode}: ${error instanceof Error ? error.message : 'Unknown'}`,
+            );
+          }
+
+          // Get package info from order DTO
+          const packageInfo = packageInfoMap.get(packageCode);
+
+          // Double-check invoice exists right before creating purchase
+          // This ensures the invoice is committed to the database
+          const invoiceCheck = await this.esimInvoiceRepository.findOne({
+            where: { id: existingInvoice.id },
+          });
+
+          if (!invoiceCheck) {
+            this.logger.error(
+              `Invoice ${existingInvoice.id} does not exist in database when creating purchase. Skipping this purchase.`,
+            );
+            return null;
+          }
+
+          // Prepare purchase data
+          const purchaseData: Partial<ESimPurchase> = {
+            customerId: existingCustomer.id, // Use verified customer ID
+            invoiceId: invoiceCheck.id, // Use invoice ID from fresh database query
+            // Generate unique transaction ID per SIM card
+            // Format: {esimOrderTransactionId}-{iccid}-{random}
+            // Note: This is NOT linked to Transaction entity, it's just a unique identifier
+            transactionId: `${esimOrderTransactionId}-${iccid || Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            orderNo:
+              orderResponseData.orderNo ||
+              orderResponseData.obj?.orderNo ||
+              null,
+            esimTranNo: simItem.esimTranNo || null,
+            packageCode: packageCode,
+            slug: packageDetails?.slug || '',
+            packageName:
+              packageDetails?.name ||
+              packageDetails?.packageName ||
+              `Package ${packageCode}`,
+            price: packageInfo?.price || esimInvoice.amount / simList.length,
+            currency: packageDetails?.currencyCode || 'MNT',
+            dataVolume: packageDetails?.volume || simItem.totalVolume || 0,
+            duration: packageDetails?.duration || simItem.totalDuration || 0,
+            durationUnit:
+              packageDetails?.durationUnit || simItem.durationUnit || 'DAY',
+            location: packageDetails?.location || '',
+            description: packageDetails?.description || null,
+            iccid: iccid,
+            activationCode: activationCode || qrCodeUrl,
+            isActivated: simItem.activateTime ? true : false,
+            isActive: true,
+            packageMetadata: {
+              ...packageDetails,
+              orderNo: orderResponseData.orderNo,
+              esimTranNo: simItem.esimTranNo,
+              qrCodeUrl: qrCodeUrl,
+              imsi: simItem.imsi,
+              msisdn: simItem.msisdn,
+              smdpStatus: simItem.smdpStatus,
+              eid: simItem.eid,
+              activateTime: simItem.activateTime,
+              expiredTime: simItem.expiredTime,
+              installationTime: simItem.installationTime,
+              esimStatus: simItem.esimStatus,
+            },
+          };
+
+          // Calculate expiration date
+          if (purchaseData.duration && purchaseData.durationUnit) {
+            purchaseData.expiresAt = this.calculateExpirationDate(
+              purchaseData.duration,
+              purchaseData.durationUnit,
+            );
+          } else if (simItem.expiredTime) {
+            purchaseData.expiresAt = new Date(simItem.expiredTime);
+          }
+
+          // Set activated date if available
+          if (simItem.activateTime) {
+            purchaseData.activatedAt = new Date(simItem.activateTime);
+          }
+
+          // Create and save purchase record
+          const esimPurchase = this.esimPurchaseRepository.create(purchaseData);
+          return await this.esimPurchaseRepository.save(esimPurchase);
+        } catch (error) {
+          this.logger.error(
+            `Failed to create purchase record for SIM item: ${error instanceof Error ? error.message : 'Unknown'}`,
+            error instanceof Error ? error.stack : undefined,
+          );
+          return null;
+        }
+      });
+
+      const purchases = await Promise.all(purchasePromises);
+      const successfulPurchases = purchases.filter((p) => p !== null);
+
+      this.logger.log(
+        `Created ${successfulPurchases.length} ESimPurchase records for invoice ${esimInvoice.id}`,
+      );
+
+      // If no purchases were created from SIM list, try fallback
+      if (successfulPurchases.length === 0) {
+        this.logger.warn(
+          `No purchases created from SIM list. Attempting fallback for invoice ${esimInvoice.id}`,
+        );
+        // Try to extract esimTranNo and iccid from order response
+        const esimTranNo =
+          orderResponseData.esimTranNo ||
+          orderResponseData.obj?.esimTranNo ||
+          (Array.isArray(simList) && simList.length > 0
+            ? simList[0]?.esimTranNo
+            : null) ||
+          null;
+        const iccid =
+          orderResponseData.iccid ||
+          orderResponseData.obj?.iccid ||
+          (Array.isArray(simList) && simList.length > 0
+            ? simList[0]?.iccid
+            : null) ||
+          null;
+
+        await this.createPurchasesFromPackageInfo(
+          esimInvoice,
+          esimOrderTransactionId,
+          orderEsimDto,
+          orderResponseData.orderNo || orderResponseData.obj?.orderNo || null,
+          esimTranNo,
+          iccid,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to create ESimPurchase records from order response: ${error instanceof Error ? error.message : 'Unknown'}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      // Try fallback even on error
+      try {
+        this.logger.log(
+          `Attempting fallback: creating purchases from package info for invoice ${esimInvoice.id}`,
+        );
+        // Try to extract esimTranNo and iccid from order response
+        const esimTranNo =
+          orderResponseData.esimTranNo ||
+          orderResponseData.obj?.esimTranNo ||
+          null;
+        const iccid =
+          orderResponseData.iccid || orderResponseData.obj?.iccid || null;
+
+        await this.createPurchasesFromPackageInfo(
+          esimInvoice,
+          esimOrderTransactionId,
+          orderEsimDto,
+          orderResponseData.orderNo || orderResponseData.obj?.orderNo || null,
+          esimTranNo,
+          iccid,
+        );
+      } catch (fallbackError) {
+        this.logger.error(
+          `Fallback also failed: ${fallbackError instanceof Error ? fallbackError.message : 'Unknown'}`,
+        );
+      }
+      // Don't throw - we want the order to succeed even if purchase creation fails
+    }
+  }
+
+  /**
+   * Create ESimPurchase records from package info (fallback method)
+   * Used when SIM list is not available in order response
+   * @param esimInvoice - The invoice record
+   * @param esimOrderTransactionId - The eSIM order transaction ID
+   * @param orderEsimDto - The order DTO with package info
+   */
+  private async createPurchasesFromPackageInfo(
+    esimInvoice: EsimInvoice,
+    esimOrderTransactionId: string,
+    orderEsimDto: OrderEsimDto,
+    orderNo: string | null = null,
+    esimTranNo: string | null = null,
+    iccid: string | null = null,
+  ): Promise<void> {
+    // Ensure invoice is saved and has an ID
+    if (!esimInvoice.id) {
+      this.logger.error(
+        `Invoice does not have an ID, cannot create purchases. Invoice: ${JSON.stringify(esimInvoice)}`,
+      );
+      return;
+    }
+
+    // Verify invoice exists in database and load customer relation
+    const existingInvoice = await this.esimInvoiceRepository.findOne({
+      where: { id: esimInvoice.id },
+      relations: ['customer'],
+    });
+
+    if (!existingInvoice) {
+      this.logger.error(
+        `Invoice with ID ${esimInvoice.id} does not exist in database, cannot create purchases`,
+      );
+      return;
+    }
+
+    const customer = existingInvoice.customer;
+    if (!customer) {
+      this.logger.warn(
+        `No customer found for invoice ${existingInvoice.id}, cannot create purchases`,
+      );
+      return;
+    }
+
+    // Ensure customer exists in database
+    const existingCustomer = await this.customerRepository.findOne({
+      where: { id: customer.id },
+    });
+
+    if (!existingCustomer) {
+      this.logger.error(
+        `Customer with ID ${customer.id} does not exist in database, cannot create purchases`,
+      );
+      return;
+    }
+
+    // Create one purchase per package in the order
+    const purchasePromises = orderEsimDto.packageInfoList.map(
+      async (packageInfo, index) => {
+        try {
+          // Get package details from inquiry service
+          let packageDetails: any = null;
+          try {
+            const packages =
+              await this.inquiryPackagesService.getPackagesByFilters({
+                packageCode: packageInfo.packageCode,
+              });
+            if (packages && packages.length > 0) {
+              packageDetails = packages[0];
+            }
+          } catch (error) {
+            this.logger.warn(
+              `Failed to fetch package details for ${packageInfo.packageCode}: ${error instanceof Error ? error.message : 'Unknown'}`,
+            );
+          }
+
+          // Create purchase for each count (if count > 1, create multiple purchases)
+          const purchases = [];
+          for (let i = 0; i < packageInfo.count; i++) {
+            // Double-check invoice exists right before creating purchase
+            const invoiceCheck = await this.esimInvoiceRepository.findOne({
+              where: { id: existingInvoice.id },
+            });
+
+            if (!invoiceCheck) {
+              this.logger.error(
+                `Invoice ${existingInvoice.id} does not exist in database when creating purchase ${i + 1} of ${packageInfo.count}. Skipping.`,
+              );
+              continue; // Skip this purchase
+            }
+
+            const purchaseData: Partial<ESimPurchase> = {
+              customerId: existingCustomer.id, // Use verified customer ID
+              invoiceId: invoiceCheck.id, // Use invoice ID from fresh database query
+              // Generate unique transaction ID per purchase
+              transactionId: `${esimOrderTransactionId}-${packageInfo.packageCode}-${index}-${i}-${Date.now()}`,
+              orderNo: orderNo,
+              esimTranNo: esimTranNo, // Extracted from order response when available
+              packageCode: packageInfo.packageCode,
+              slug: packageDetails?.slug || '',
+              packageName:
+                packageDetails?.name ||
+                packageDetails?.packageName ||
+                `Package ${packageInfo.packageCode}`,
+              price: packageInfo.price,
+              currency: packageDetails?.currencyCode || 'MNT',
+              dataVolume: packageDetails?.volume || 0,
+              duration: packageDetails?.duration || 0,
+              durationUnit: packageDetails?.durationUnit || 'DAY',
+              location: packageDetails?.location || '',
+              description: packageDetails?.description || null,
+              iccid: iccid, // Extracted from order response when available
+              activationCode: null, // Will be updated when SIM details are available
+              isActivated: false,
+              isActive: true,
+              packageMetadata: packageDetails || null,
+            };
+
+            // Calculate expiration date
+            if (purchaseData.duration && purchaseData.durationUnit) {
+              purchaseData.expiresAt = this.calculateExpirationDate(
+                purchaseData.duration,
+                purchaseData.durationUnit,
+              );
+            }
+
+            const esimPurchase =
+              this.esimPurchaseRepository.create(purchaseData);
+            purchases.push(
+              await this.esimPurchaseRepository.save(esimPurchase),
+            );
+          }
+
+          return purchases;
+        } catch (error) {
+          this.logger.error(
+            `Failed to create purchase for package ${packageInfo.packageCode}: ${error instanceof Error ? error.message : 'Unknown'}`,
+          );
+          return [];
+        }
+      },
+    );
+
+    const allPurchases = await Promise.all(purchasePromises);
+    const totalPurchases = allPurchases.flat().length;
+
+    this.logger.log(
+      `Created ${totalPurchases} ESimPurchase records from package info for invoice ${esimInvoice.id}`,
+    );
+  }
+
+  /**
+   * Get customer data by email or phone number
+   * Returns active QPay invoices and purchased SIM cards
+   * @param email - Customer email (optional)
+   * @param phoneNumber - Customer phone number (optional)
+   * @returns Customer data with active invoices and purchased SIM cards
+   */
+  async getCustomerData(
+    email?: string,
+    phoneNumber?: string,
+  ): Promise<{
+    customerId: string;
+    email: string;
+    phoneNumber: string;
+    activeInvoices: EsimInvoice[];
+    purchasedSimCards: ESimPurchase[];
+  }> {
+    if (!email && !phoneNumber) {
+      throw new BadRequestException(
+        'Either email or phoneNumber must be provided',
+      );
+    }
+
+    // Find customer by email or phone (OR logic)
+    let customer: Customer | null = null;
+
+    if (email && phoneNumber) {
+      // If both provided, try email first, then phone
+      customer = await this.customerRepository.findOne({
+        where: [{ email }, { phoneNumber }],
+      });
+    } else if (email) {
+      customer = await this.customerRepository.findOne({
+        where: { email },
+      });
+    } else if (phoneNumber) {
+      customer = await this.customerRepository.findOne({
+        where: { phoneNumber },
+      });
+    }
+
+    if (!customer) {
+      throw new NotFoundException('Customer not found');
+    }
+
+    // Get active invoices (PENDING, PAID, PROCESSED)
+    const activeInvoices = await this.esimInvoiceRepository.find({
+      where: {
+        customerId: customer.id,
+        status: In(['PENDING', 'PAID', 'PROCESSED']),
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+    // Get purchased SIM cards for this customer
+    // Query by customerId directly (now that ESimPurchase supports customers)
+    const purchasedSimCards = await this.esimPurchaseRepository.find({
+      where: { customerId: customer.id },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+    return {
+      customerId: customer.id,
+      email: customer.email,
+      phoneNumber: customer.phoneNumber,
+      activeInvoices,
+      purchasedSimCards,
+    };
+  }
+
+  /**
+   * Query eSIM purchases with filters and pagination
+   * Calls the eSIM Access API to query eSIM purchases
+   * @param queryDto - Query parameters (orderNo, esimTranNo, iccid, startTime, endTime, pager)
+   * @returns Query response matching API format
+   */
+  async queryEsimPurchases(queryDto: QueryEsimDto): Promise<{
+    success: boolean;
+    errorCode: string;
+    errorMsg: string | null;
+    obj: {
+      esimList: any[];
+      pager: {
+        pageSize: number;
+        pageNum: number;
+        total: number;
+      };
+    };
+  }> {
+    // Validate access code is configured
+    if (!this.accessCode) {
+      this.logger.error('ESIM_ACCESS_CODE is not configured');
+      throw new BadRequestException('eSIM service is not properly configured');
+    }
+
+    const pageNum = queryDto.pager?.pageNum || 1;
+    const pageSize = queryDto.pager?.pageSize || 20;
+
+    // Prepare request body for eSIM Access API
+    const requestBody: any = {
+      orderNo: queryDto.orderNo || '',
+      esimTranNo: queryDto.esimTranNo || '',
+      iccid: queryDto.iccid || '',
+      pager: {
+        pageNum: pageNum,
+        pageSize: pageSize,
+      },
+    };
+
+    // Add optional date filters if provided
+    if (queryDto.startTime) {
+      requestBody.startTime = queryDto.startTime;
+    }
+    if (queryDto.endTime) {
+      requestBody.endTime = queryDto.endTime;
+    }
+
+    // Call eSIM Access API to query eSIM purchases
+    const url = `${this.apiBaseUrl}/open/esim/query`;
+    this.logger.log(
+      `Querying eSIM purchases from API: ${url} with filters: orderNo=${queryDto.orderNo || ''}, esimTranNo=${queryDto.esimTranNo || ''}, iccid=${queryDto.iccid || ''}`,
+    );
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(url, requestBody, {
+          headers: {
+            'RT-AccessCode': this.accessCode,
+            'Content-Type': 'application/json',
+          },
+          timeout: 30000, // 30 seconds timeout
+        }),
+      );
+
+      const apiResponse = response.data;
+
+      // Validate API response
+      if (!apiResponse) {
+        this.logger.error('Empty response from eSIM Access API');
+        throw new BadRequestException('Invalid response from eSIM provider');
+      }
+
+      this.logger.log(
+        `Successfully queried eSIM purchases. Found ${apiResponse.obj?.esimList?.length || 0} items`,
+      );
+
+      // Return the API response as-is (it already matches the expected format)
+      return {
+        success: apiResponse.success !== undefined ? apiResponse.success : true,
+        errorCode: apiResponse.errorCode || '0',
+        errorMsg: apiResponse.errorMsg || null,
+        obj: {
+          esimList: apiResponse.obj?.esimList || [],
+          pager: apiResponse.obj?.pager || {
+            pageSize,
+            pageNum,
+            total: 0,
+          },
+        },
+      };
+    } catch (error) {
+      const axiosError = error as AxiosError;
+      this.logger.error(
+        `eSIM query API call failed: ${axiosError.message}`,
+        axiosError.stack,
+      );
+
+      // Extract error message from response if available
+      let errorMessage = 'Failed to query eSIM purchases';
+      if (axiosError.response?.data) {
+        const errorData = axiosError.response.data as any;
+        errorMessage =
+          errorData.errorMsg ||
+          errorData.message ||
+          `API Error: ${axiosError.response.status}`;
+      } else if (
+        axiosError.code === 'ECONNABORTED' ||
+        axiosError.message.includes('timeout')
+      ) {
+        errorMessage = 'eSIM provider API request timed out';
+      }
+
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.BAD_REQUEST,
+          message: errorMessage,
+          error: 'eSIM Query Failed',
+        },
+        HttpStatus.BAD_REQUEST,
+      );
     }
   }
 }

@@ -14,4 +14,3 @@ export class FreezeWalletDto {
   })
   reason?: string;
 }
-

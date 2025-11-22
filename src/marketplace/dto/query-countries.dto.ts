@@ -12,4 +12,3 @@ export class QueryCountriesDto {
   @Type(() => Number)
   region_id?: number;
 }
-

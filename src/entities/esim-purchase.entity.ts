@@ -1,41 +1,57 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  UpdateDateColumn,
-  ManyToOne,
-  JoinColumn,
+  Entity,
   Index,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
+// Transaction import removed - transactionId is now a plain string without relation
+import { Customer } from './customer.entity';
 import { User } from './user.entity';
-import { Transaction } from './transaction.entity';
 
 /**
  * eSIM Purchase entity for tracking purchased eSIM cards
  * Links to transaction and stores all eSIM package details
+ * Supports both User purchases (userId) and Customer purchases (customerId)
  */
 @Entity('esim_purchases')
 @Index(['userId', 'createdAt']) // Index for user purchase history queries
-@Index(['transactionId'], { unique: true }) // Unique index for transaction reference
+@Index(['customerId', 'createdAt']) // Index for customer purchase history queries
+@Index(['transactionId']) // Index for transaction reference (removed unique to support multiple SIMs per transaction)
 @Index(['packageCode']) // Index for package code queries
+@Index(['invoiceId']) // Index for invoice reference
 export class ESimPurchase {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
-  userId: string;
+  @Column({ nullable: true })
+  userId: string | null;
 
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @ManyToOne(() => User, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'userId' })
-  user: User;
+  user: User | null;
 
-  @Column({ unique: true })
-  transactionId: string; // Reference to transaction.transactionId
+  @Column({ nullable: true })
+  customerId: string | null;
 
-  @ManyToOne(() => Transaction, { nullable: true, onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'transactionId', referencedColumnName: 'transactionId' })
-  transaction: Transaction | null;
+  @ManyToOne(() => Customer, { onDelete: 'CASCADE', nullable: true })
+  @JoinColumn({ name: 'customerId' })
+  customer: Customer | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  invoiceId: string | null;
+
+  @Column({ type: 'varchar' })
+  transactionId: string; // Reference to transaction.transactionId (for user purchases) or unique ID (for customer purchases)
+
+  @Column({ type: 'varchar', nullable: true })
+  orderNo: string | null; // eSIM provider order number
+
+  @Column({ type: 'varchar', nullable: true })
+  esimTranNo: string | null; // eSIM provider transaction number
 
   // eSIM Package Details
   @Column()
@@ -101,4 +117,3 @@ export class ESimPurchase {
   @UpdateDateColumn()
   updatedAt: Date;
 }
-

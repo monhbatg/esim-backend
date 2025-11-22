@@ -67,7 +67,8 @@ export class CategoriesController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Create a new category',
-    description: 'Create a new category with English and Mongolian names and descriptions',
+    description:
+      'Create a new category with English and Mongolian names and descriptions',
   })
   @ApiBody({ type: CreateCategoryDto })
   @ApiResponse({
@@ -117,7 +118,8 @@ export class CategoriesController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Delete a category',
-    description: 'Delete a category by its ID. This will remove the category from all associated countries.',
+    description:
+      'Delete a category by its ID. This will remove the category from all associated countries.',
   })
   @ApiParam({ name: 'id', type: Number, description: 'Category ID' })
   @ApiResponse({
@@ -144,4 +146,3 @@ export class CategoriesController {
     return { message: 'Category deleted successfully' };
   }
 }
-

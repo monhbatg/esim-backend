@@ -9,4 +9,3 @@ export const CURRENCY_CONSTANTS = {
   /** Currency code for package prices */
   CURRENCY_CODE: 'MNT',
 } as const;
-

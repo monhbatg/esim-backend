@@ -46,4 +46,3 @@ export class RegionsService {
     await this.regionRepository.remove(region);
   }
 }
-

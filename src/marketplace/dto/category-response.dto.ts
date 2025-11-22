@@ -4,10 +4,16 @@ export class CategoryResponseDto {
   @ApiProperty({ example: 1, description: 'Category ID' })
   id: number;
 
-  @ApiProperty({ example: 'Top Destinations', description: 'Category name in English' })
+  @ApiProperty({
+    example: 'Top Destinations',
+    description: 'Category name in English',
+  })
   name_en: string;
 
-  @ApiProperty({ example: 'Шилдэг чиглэлүүд', description: 'Category name in Mongolian' })
+  @ApiProperty({
+    example: 'Шилдэг чиглэлүүд',
+    description: 'Category name in Mongolian',
+  })
   name_mn: string;
 
   @ApiPropertyOptional({
@@ -36,4 +42,3 @@ export class CategoryResponseDto {
   })
   updatedAt: Date;
 }
-

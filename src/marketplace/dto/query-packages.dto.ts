@@ -12,4 +12,3 @@ export class QueryPackagesDto {
   @IsString()
   country_code: string;
 }
-

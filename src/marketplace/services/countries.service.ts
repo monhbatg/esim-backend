@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Country } from '../../entities/country.entity';
@@ -60,7 +64,10 @@ export class CountriesService {
     return await this.countryRepository.save(country);
   }
 
-  async update(id: number, updateCountryDto: UpdateCountryDto): Promise<Country> {
+  async update(
+    id: number,
+    updateCountryDto: UpdateCountryDto,
+  ): Promise<Country> {
     const country = await this.findOne(id);
 
     // If region_id is being updated, verify the new region exists
@@ -85,4 +92,3 @@ export class CountriesService {
     await this.countryRepository.remove(country);
   }
 }
-

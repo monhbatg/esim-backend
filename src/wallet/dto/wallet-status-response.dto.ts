@@ -56,4 +56,3 @@ export class WalletStatusResponseDto {
   })
   updatedAt: Date;
 }
-

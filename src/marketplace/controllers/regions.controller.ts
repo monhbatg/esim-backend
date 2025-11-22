@@ -117,7 +117,8 @@ export class RegionsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Delete a region',
-    description: 'Delete a region by its ID. This will cascade delete all associated countries.',
+    description:
+      'Delete a region by its ID. This will cascade delete all associated countries.',
   })
   @ApiParam({ name: 'id', type: Number, description: 'Region ID' })
   @ApiResponse({
@@ -144,4 +145,3 @@ export class RegionsController {
     return { message: 'Region deleted successfully' };
   }
 }
-

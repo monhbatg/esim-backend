@@ -12,7 +12,12 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { ApiOperation, ApiResponse, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import type { AuthRequest } from '../auth/interfaces/auth-request.interface';
 import { DataPackageDto } from './dto/data-package.dto';
 import { LocationDto } from './dto/location.dto';
@@ -237,8 +242,7 @@ export class InquiryController {
   @Post('savePackages')
   @ApiOperation({
     summary: 'Get all available data packages',
-    description:
-      'eSIM web-с бүх багцуудыг татаж авч, хадгалах',
+    description: 'eSIM web-с бүх багцуудыг татаж авч, хадгалах',
   })
   @ApiResponse({
     status: 200,
@@ -257,8 +261,7 @@ export class InquiryController {
   @Get('favPackages')
   @ApiOperation({
     summary: 'Get all liked data packages from local DB',
-    description:
-      'Онцлох багцуудыг local DB-аас авах',
+    description: 'Онцлох багцуудыг local DB-аас авах',
   })
   @ApiResponse({
     status: 200,
@@ -277,8 +280,7 @@ export class InquiryController {
   @Get('myesim/page/:page/limit/:limit')
   @ApiOperation({
     summary: 'Get all bought data packages',
-    description:
-      'eSIM web-с худалсан авсан багцуудыг авах',
+    description: 'eSIM web-с худалсан авсан багцуудыг авах',
   })
   @ApiResponse({
     status: 200,
@@ -297,7 +299,10 @@ export class InquiryController {
     @Param('page', new ParseIntPipe()) page: number,
     @Param('limit', new ParseIntPipe()) limit: number,
   ): Promise<any> {
-    const packages = await this.inquiryPackagesService.getMyEsimPackages(page, limit);
+    const packages = await this.inquiryPackagesService.getMyEsimPackages(
+      page,
+      limit,
+    );
     return packages;
   }
 
@@ -324,15 +329,18 @@ export class InquiryController {
     @Param('orderNo') orderNo: string,
     @Request() req: AuthRequest,
   ): Promise<any> {
-    const packages = await this.inquiryPackagesService.actionMyEsimPackage(actionId, orderNo);
+    const packages = await this.inquiryPackagesService.actionMyEsimPackage(
+      actionId,
+      orderNo,
+    );
     return packages;
   }
-
 
   @Post('packages/localsearch')
   @ApiOperation({
     summary: 'Search packages with custom filters from local DB',
-    description: 'Search eSIM packages with custom filter parameters from Local DB',
+    description:
+      'Search eSIM packages with custom filter parameters from Local DB',
   })
   @ApiResponse({
     status: 200,
@@ -344,7 +352,7 @@ export class InquiryController {
     description: 'Failed to fetch packages from external API',
   })
   async searchLocalPackages(
-    @Body(new ValidationPipe({ whitelist: true })) body:  PackageQueryLastDto,
+    @Body(new ValidationPipe({ whitelist: true })) body: PackageQueryLastDto,
   ): Promise<any> {
     const packages =
       await this.inquiryPackagesService.getLocalPackagesByFilters(body);
@@ -355,8 +363,7 @@ export class InquiryController {
   @Get('localPackages')
   @ApiOperation({
     summary: 'Get all liked data packages from local DB',
-    description:
-      'Онцлох багцуудыг local DB-аас авах',
+    description: 'Онцлох багцуудыг local DB-аас авах',
   })
   @ApiResponse({
     status: 200,

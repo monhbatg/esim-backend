@@ -3,7 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Region } from '../entities/region.entity';
 import { Country } from '../entities/country.entity';
 import { Category } from '../entities/category.entity';
-import { Package } from '../entities/package.entity';
+import { DataPackageEntity } from '../entities/data-packages.entity';
 import { InquiryModule } from '../inquiry/inquiry.module';
 import { RegionsService } from './services/regions.service';
 import { CountriesService } from './services/countries.service';
@@ -16,7 +16,7 @@ import { MarketplaceController } from './controllers/marketplace.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Region, Country, Category, Package]),
+    TypeOrmModule.forFeature([Region, Country, Category, DataPackageEntity]),
     InquiryModule,
   ],
   controllers: [

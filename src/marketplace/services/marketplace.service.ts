@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Like, Raw, Repository } from 'typeorm';
 import { Category } from '../../entities/category.entity';
 import { Country } from '../../entities/country.entity';
-import { Package } from '../../entities/package.entity';
+import { DataPackageEntity } from '../../entities/data-packages.entity';
 import {
   CategoryFilterDto,
   CountryFilterDto,
@@ -18,8 +18,8 @@ export class MarketplaceService {
     private readonly categoryRepository: Repository<Category>,
     @InjectRepository(Country)
     private readonly countryRepository: Repository<Country>,
-    @InjectRepository(Package)
-    private readonly packageRepository: Repository<Package>,
+    @InjectRepository(DataPackageEntity)
+    private readonly packageRepository: Repository<DataPackageEntity>,
   ) {}
 
   /**
@@ -157,42 +157,42 @@ export class MarketplaceService {
       where: [
         {
           location: Like(`%${upperCountryCode}%`),
-          buy_price: Raw((alias) => `CAST(${alias} AS DECIMAL) > 0`),
+          buyPrice: Raw((alias) => `CAST(${alias} AS DECIMAL) > 0`),
         },
         {
-          location_code: upperCountryCode,
-          buy_price: Raw((alias) => `CAST(${alias} AS DECIMAL) > 0`),
+          locationCode: upperCountryCode,
+          buyPrice: Raw((alias) => `CAST(${alias} AS DECIMAL) > 0`),
         },
       ],
       order: {
-        buy_price: 'ASC',
+        buyPrice: 'ASC',
       },
     });
 
     return packages.map((pkg) => ({
       id: pkg.id,
-      packageCode: pkg.package_code,
+      packageCode: pkg.packageCode,
       slug: pkg.slug,
       name: pkg.name,
       description: pkg.description,
-      currencyCode: pkg.currency_code,
+      currencyCode: pkg.currencyCode,
       volume: Number(pkg.volume),
       duration: pkg.duration,
-      durationUnit: pkg.duration_unit,
-      smsStatus: pkg.sms_status,
-      dataType: pkg.data_type,
-      unusedValidTime: pkg.unused_valid_time,
-      activeType: pkg.active_type,
+      durationUnit: pkg.durationUnit,
+      smsStatus: pkg.smsStatus,
+      dataType: pkg.dataType,
+      unusedValidTime: pkg.unusedValidTime,
+      activeType: pkg.activeType,
       favorite: pkg.favorite,
-      supportTopupType: pkg.support_topup_type,
-      fupPolicy: pkg.fup_policy,
+      supportTopupType: pkg.supportTopUpType,
+      fupPolicy: pkg.fupPolicy,
       speed: pkg.speed,
-      ipExport: pkg.ip_export,
+      ipExport: pkg.ipExport,
       location: pkg.location,
-      locationCode: pkg.location_code,
-      buyPrice: parseFloat(pkg.buy_price),
-      createdAt: pkg.created_at,
-      updatedAt: pkg.updated_at,
+      locationCode: pkg.locationCode,
+      buyPrice: Number(pkg.buyPrice),
+      createdAt: pkg.createdAt,
+      updatedAt: pkg.updatedAt,
     }));
   }
 }

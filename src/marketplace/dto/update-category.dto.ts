@@ -40,4 +40,3 @@ export class UpdateCategoryDto {
   @MaxLength(1000)
   description_mn?: string | null;
 }
-

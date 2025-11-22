@@ -1,4 +1,11 @@
-import { IsString, IsNumber, IsOptional, MinLength, MaxLength, Length } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsOptional,
+  MinLength,
+  MaxLength,
+  Length,
+} from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
@@ -51,4 +58,3 @@ export class UpdateCountryDto {
   @MaxLength(500)
   image?: string | null;
 }
-

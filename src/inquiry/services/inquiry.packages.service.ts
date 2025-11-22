@@ -1,5 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
-import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import {
+  forwardRef,
+  Inject,
+  Injectable,
+  HttpException,
+  HttpStatus,
+  Logger,
+} from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { AxiosError } from 'axios';
@@ -9,7 +16,9 @@ import { DataPackageEntity } from 'src/entities/data-packages.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Util } from 'src/transactions/utils/util';
-import { EsimItem, MyEsimPackagesResponseDto } from '../dto/esim.package.response.dto';
+import { EsimItem } from '../dto/esim.package.response.dto';
+import { TransactionsService } from 'src/transactions/transactions.service';
+import { QueryEsimDto } from 'src/transactions/dto/query-esim.dto';
 
 interface Operator {
   operatorName: string;
@@ -72,6 +81,8 @@ export class InquiryPackagesService {
     private readonly httpService: HttpService,
     @InjectRepository(DataPackageEntity)
     private readonly dataPackageRepo: Repository<DataPackageEntity>,
+    @Inject(forwardRef(() => TransactionsService))
+    private readonly transactionsService: TransactionsService,
   ) {}
 
   /**
@@ -313,7 +324,6 @@ export class InquiryPackagesService {
     return 'Unknown error occurred';
   }
 
-
   async saveAllDataPackages(): Promise<DataPackage[]> {
     try {
       const url = `${this.apiBaseUrl}/open/package/list`;
@@ -359,7 +369,10 @@ export class InquiryPackagesService {
                 pkg as unknown as CreateDataPackageDto,
               ) as unknown as DataPackageEntity;
             } catch (err) {
-              this.logger.error('Mapping package to entity failed', err as Error);
+              this.logger.error(
+                'Mapping package to entity failed',
+                err as Error,
+              );
               return null;
             }
           })
@@ -371,39 +384,49 @@ export class InquiryPackagesService {
         }
 
         // Prefer bulk upsert if available (insert or update on conflict)
-      if (typeof (this.dataPackageRepo as any).upsert === 'function') {
-        try {
-          // Use packageCode as unique key. Adjust conflictPaths if your unique column differs.
-          await (this.dataPackageRepo as any).upsert(entities, ['packageCode']);
-          this.logger.log(`Upserted ${entities.length} packages using repository.upsert`);
-          // Fetch and return saved rows (optional)
-          const packageCodes = entities.map((e) => e.packageCode);
-          const saved = await this.dataPackageRepo.findBy(packageCodes.length ? { packageCode: packageCodes } as any : {});
-          return saved;
-        } catch (err) {
-          this.logger.error('Bulk upsert failed, falling back to per-item save', err as Error);
-        }
-      }
-
-      // Fallback: preload existing and save per item (works with older TypeORM)
-      
-      for (const entity of entities) {
-        try {
-          // Try to preload existing by unique key
-          const existing = await this.dataPackageRepo.findOneBy({ packageCode: entity.packageCode } as any);
-          if (existing) {
-            const merged = this.dataPackageRepo.merge(existing, entity);
-            savedEntities.push(await this.dataPackageRepo.save(merged));
-          } else {
-            savedEntities.push(await this.dataPackageRepo.save(entity));
+        /* 
+        // Commented out because upsert overwrites local fields like buyPrice with null/default
+        if (typeof (this.dataPackageRepo as any).upsert === 'function') {
+          try {
+            // Use packageCode as unique key. Adjust conflictPaths if your unique column differs.
+            await (this.dataPackageRepo as any).upsert(entities, ['packageCode']);
+            this.logger.log(`Upserted ${entities.length} packages using repository.upsert`);
+            // Fetch and return saved rows (optional)
+            const packageCodes = entities.map((e) => e.packageCode);
+            const saved = await this.dataPackageRepo.findBy(packageCodes.length ? { packageCode: packageCodes } as any : {});
+            return saved;
+          } catch (err) {
+            this.logger.error('Bulk upsert failed, falling back to per-item save', err as Error);
           }
-        } catch (err) {
-          this.logger.error(`Failed to save package ${entity.packageCode}`, err as Error);
-        }
-      }
+        } 
+        */
 
-      this.logger.log(`Saved ${savedEntities.length} packages to DB (fallback path)`);
-      return savedEntities;
+        // Fallback: preload existing and save per item (works with older TypeORM)
+
+        for (const entity of entities) {
+          try {
+            // Try to preload existing by unique key
+            const existing = await this.dataPackageRepo.findOneBy({
+              packageCode: entity.packageCode,
+            } as any);
+            if (existing) {
+              const merged = this.dataPackageRepo.merge(existing, entity);
+              savedEntities.push(await this.dataPackageRepo.save(merged));
+            } else {
+              savedEntities.push(await this.dataPackageRepo.save(entity));
+            }
+          } catch (err) {
+            this.logger.error(
+              `Failed to save package ${entity.packageCode}`,
+              err as Error,
+            );
+          }
+        }
+
+        this.logger.log(
+          `Saved ${savedEntities.length} packages to DB (fallback path)`,
+        );
+        return savedEntities;
       }
 
       this.logger.warn('No packages found in API response');
@@ -413,60 +436,56 @@ export class InquiryPackagesService {
     }
   }
 
-  
-
-  async getMyEsimPackages(page: number , limit: number): Promise<any[]> {
+  async getMyEsimPackages(
+    page: number,
+    limit: number,
+    orderNo?: string,
+    esimTranNo?: string,
+    iccid?: string,
+  ): Promise<any> {
     try {
-      this.logger.log(`Checking my eSIM packages from eSIM web`);
-      const url = `${this.apiBaseUrl}/open/esim/query`;
-      this.logger.log(`Fetching data packages from: ${url}`);
-      const response: any = await firstValueFrom(
-        this.httpService.post<ApiResponse>(
-          url,
-          {
-            orderNo: '',
-            esimTranNo:'',
-            iccid: '',
-            pager: 
-              { pageNum: page,
-                pageSize: limit 
-              }
-          },
-          {
-            headers: {
-              'RT-AccessCode': this.accessCode,
-              'Content-Type': 'application/json',
-            },
-            timeout: 10000,
-          },
-        ),
+      this.logger.log(
+        `Querying eSIM packages from local database with filters: orderNo=${orderNo || ''}, esimTranNo=${esimTranNo || ''}, iccid=${iccid || ''}`,
       );
-      return response.data;
+
+      const queryDto: QueryEsimDto = {
+        orderNo: orderNo || '',
+        esimTranNo: esimTranNo || '',
+        iccid: iccid || '',
+        pager: {
+          pageNum: page,
+          pageSize: limit,
+        },
+      };
+
+      const result =
+        await this.transactionsService.queryEsimPurchases(queryDto);
+
+      this.logger.log(
+        `Found ${result.obj.esimList.length} eSIM packages (total: ${result.obj.pager.total})`,
+      );
+
+      return result;
     } catch (error) {
       this.handleError(error, 'Failed to get My eSIM packages');
     }
   }
 
-  async actionMyEsimPackage(actionNo: number, orderNo: string ): Promise<any[]> {
+  async actionMyEsimPackage(actionNo: number, orderNo: string): Promise<any[]> {
     try {
-      this.logger.log(
-        `Performing action ${actionNo} on eSIM: ${orderNo}`,
-      );
-
-      
+      this.logger.log(`Performing action ${actionNo} on eSIM: ${orderNo}`);
 
       // Fetch all eSIM packages
       const myEsimResponse: any = await this.getMyEsimPackages(1, 100);
       // Check if esimTranNo exists in the response
       const found = myEsimResponse?.obj?.esimList?.find(
-        (esim: EsimItem) =>
-          esim.orderNo === orderNo
+        (esim: EsimItem) => esim.orderNo === orderNo,
       );
 
       if (!found) {
         this.logger.warn(`eSIM not found for identifier ${orderNo}`);
         throw new HttpException(
-          { 
+          {
             success: false,
             message: `eSIM not found for identifier ${orderNo}`,
           },
@@ -474,12 +493,10 @@ export class InquiryPackagesService {
         );
       }
 
-      
-
       const targetEsimTranNo = found.esimTranNo;
-      this.logger.log(`Found eSIM. esimTranNo=${targetEsimTranNo}, proceeding with action ${actionNo}`);
-
-      
+      this.logger.log(
+        `Found eSIM. esimTranNo=${targetEsimTranNo}, proceeding with action ${actionNo}`,
+      );
 
       const url = `${this.apiBaseUrl}${Util.selectUrl(actionNo)}`;
       this.logger.log(`Fetching data packages from: ${url}`);
@@ -504,22 +521,16 @@ export class InquiryPackagesService {
     }
   }
 
-
-
-
-
   // Get from local database
   async getLocalPackages(): Promise<DataPackageEntity[]> {
     try {
-      const favs = await this.dataPackageRepo.find({
-      });
+      const favs = await this.dataPackageRepo.find({});
       this.logger.log(`Found ${favs.length} all packages`);
       return favs;
     } catch (error) {
       this.handleError(error, 'Failed to get favorite packages');
     }
   }
-
 
   async getFavPackages(): Promise<DataPackageEntity[]> {
     try {
@@ -533,10 +544,7 @@ export class InquiryPackagesService {
     }
   }
 
-
-  async getLocalPackagesByFilters(
-    params: PackageQueryParams,
-  ): Promise<any> {
+  async getLocalPackagesByFilters(params: PackageQueryParams): Promise<any> {
     try {
       this.logger.log(
         `Querying local packages with filters: ${JSON.stringify(params)}`,
@@ -545,7 +553,9 @@ export class InquiryPackagesService {
       const qb = this.dataPackageRepo.createQueryBuilder('p');
 
       if (params.locationCode) {
-        qb.andWhere('p.location = :location', { location: params.locationCode });
+        qb.andWhere('p.location = :location', {
+          location: params.locationCode,
+        });
       }
 
       if (params.type) {
@@ -567,12 +577,12 @@ export class InquiryPackagesService {
       }
 
       const results = await qb.getMany();
-      this.logger.log(`Found ${results.length} local packages matching filters`);
+      this.logger.log(
+        `Found ${results.length} local packages matching filters`,
+      );
       return results;
     } catch (error) {
       this.handleError(error, 'Failed to fetch local packages with filters');
     }
   }
-
-
 }

@@ -28,4 +28,3 @@ export class Region {
   @UpdateDateColumn()
   updatedAt: Date;
 }
-

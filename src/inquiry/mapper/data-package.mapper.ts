@@ -10,7 +10,7 @@ export class DataPackageMapper {
     dataPackage.packageCode = dto.packageCode;
     dataPackage.slug = dto.slug;
     dataPackage.name = dto.name;
-    dataPackage.price = dto.price/10000;
+    dataPackage.price = dto.price;
     dataPackage.currencyCode = dto.currencyCode;
     dataPackage.volume = dto.volume;
     dataPackage.smsStatus = dto.smsStatus;

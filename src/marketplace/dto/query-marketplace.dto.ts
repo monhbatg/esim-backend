@@ -5,7 +5,8 @@ import { Type } from 'class-transformer';
 export class QueryMarketplaceDto {
   @ApiPropertyOptional({
     example: 1,
-    description: 'Filter by category ID (returns only countries in this category)',
+    description:
+      'Filter by category ID (returns only countries in this category)',
   })
   @IsOptional()
   @IsNumber()
@@ -14,7 +15,8 @@ export class QueryMarketplaceDto {
 
   @ApiPropertyOptional({
     example: 1,
-    description: 'Filter by region ID (returns only countries in this region). Can be combined with category_id.',
+    description:
+      'Filter by region ID (returns only countries in this region). Can be combined with category_id.',
   })
   @IsOptional()
   @IsNumber()
@@ -23,10 +25,10 @@ export class QueryMarketplaceDto {
 
   @ApiPropertyOptional({
     example: 'thailand',
-    description: 'Search countries by name (searches both English and Mongolian names)',
+    description:
+      'Search countries by name (searches both English and Mongolian names)',
   })
   @IsOptional()
   @IsString()
   search?: string;
 }
-

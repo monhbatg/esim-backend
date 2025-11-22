@@ -22,4 +22,3 @@ export class UpdateRegionDto {
   @MaxLength(100)
   name_mn?: string;
 }
-

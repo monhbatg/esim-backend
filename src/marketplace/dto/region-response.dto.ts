@@ -22,4 +22,3 @@ export class RegionResponseDto {
   })
   updatedAt: Date;
 }
-

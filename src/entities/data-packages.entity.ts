@@ -18,19 +18,19 @@ export class DataPackageEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'package_code', type: 'varchar',  unique: true })
+  @Column({ name: 'package_code', type: 'varchar', unique: true })
   packageCode: string;
 
-  @Column({ type: 'varchar',  nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   slug: string;
 
-  @Column({ type: 'varchar'  })
+  @Column({ type: 'varchar' })
   name: string;
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, nullable: true })
+  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
   price: number;
 
-  @Column({ name: 'currency_code', type: 'varchar',  nullable: true })
+  @Column({ name: 'currency_code', type: 'varchar', nullable: true })
   currencyCode: string;
 
   @Column({ type: 'bigint', nullable: true })
@@ -54,7 +54,7 @@ export class DataPackageEntity {
   @Column({ type: 'varchar', nullable: true })
   location: string;
 
-  @Column({ name: 'location_code', type: 'varchar',  nullable: true })
+  @Column({ name: 'location_code', type: 'varchar', nullable: true })
   locationCode: string;
 
   @Column({ type: 'text', nullable: true })
@@ -66,13 +66,19 @@ export class DataPackageEntity {
   @Column({ default: false })
   favorite: boolean;
 
-  @Column({ name: 'retail_price', type: 'numeric', precision: 12, scale: 2, nullable: true })
+  @Column({
+    name: 'retail_price',
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+  })
   retailPrice: number;
 
   @Column({ type: 'varchar', nullable: true })
   speed: string;
 
-  @Column({ name: 'ip_export', type: 'varchar',  nullable: true })
+  @Column({ name: 'ip_export', type: 'varchar', nullable: true })
   ipExport: string;
 
   @Column({ name: 'support_topup_type', type: 'smallint', nullable: true })
@@ -87,12 +93,22 @@ export class DataPackageEntity {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
-  @Column({ name: 'buy_price', type: 'numeric', nullable: true })
+  @Column({
+    name: 'buy_price',
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+  })
   buyPrice: number;
 
   // Relations
-  @OneToMany(() => DataPackageLocation, (location) => location.dataPackageEntity, {
-    cascade: true,
-  })
+  @OneToMany(
+    () => DataPackageLocation,
+    (location) => location.dataPackageEntity,
+    {
+      cascade: true,
+    },
+  )
   locationNetworkList: DataPackageLocation[];
 }
