@@ -900,16 +900,6 @@ export class TransactionsController {
     };
   }
 
-  @Post('order/esim-test')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Test eSIM order',
-    description: 'Test eSIM order without payment',
-  })
-  async testOrderEsim(): Promise<unknown> {
-    return await this.qpayConnectionService.orderEsim();
-  }
-
   @Post('esim/topup')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

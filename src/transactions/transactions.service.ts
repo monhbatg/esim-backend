@@ -15,7 +15,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { AxiosError } from 'axios';
 import { firstValueFrom } from 'rxjs';
-import { DataSource, EntityManager, In, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, MoreThan, Repository } from 'typeorm';
 import { Customer } from '../entities/customer.entity';
 import { EsimInvoice } from '../entities/esim-invoice.entity';
 import { ESimPurchase } from '../entities/esim-purchase.entity';
@@ -34,6 +34,8 @@ import { PurchaseEsimDto } from './dto/purchase-esim.dto';
 import { QueryTransactionsDto } from './dto/query-transactions.dto';
 import { QueryEsimDto } from './dto/query-esim.dto';
 import { QpayConnectionService } from './services/qpay.connection.service';
+import { DataPackageEntity } from 'src/entities/data-packages.entity';
+import { MailService } from './services/mail.service';
 
 @Injectable()
 export class TransactionsService {
@@ -57,6 +59,9 @@ export class TransactionsService {
     private readonly qpayConnectionService: QpayConnectionService,
     @Inject(forwardRef(() => InquiryPackagesService))
     private readonly inquiryPackagesService: InquiryPackagesService,
+    @InjectRepository(DataPackageEntity)
+    private readonly dataPackageRepo: Repository<DataPackageEntity>,
+    private readonly mailService: MailService,
   ) {}
 
   /**
@@ -918,6 +923,8 @@ export class TransactionsService {
       invoiceData: qpayResponse,
       packageCode: dto.packageCode,
     });
+    //esimInvoice.createdAt = new Date();
+    esimInvoice.updatedAt = new Date();
 
     await this.esimInvoiceRepository.save(esimInvoice);
 
@@ -2198,6 +2205,7 @@ export class TransactionsService {
         pageNum: number;
         total: number;
       };
+      suggestPackage: any[]
     };
   }> {
     // Validate access code is configured
@@ -2257,6 +2265,13 @@ export class TransactionsService {
         `Successfully queried eSIM purchases. Found ${apiResponse.obj?.esimList?.length || 0} items`,
       );
 
+      //Top up available related packages
+      const relatedPackages = await this.dataPackageRepo.find({
+        where: { locationCode: apiResponse.obj.esimList[0].packageList[0].locationCode,
+          buyPrice : MoreThan(0)
+        },
+      });
+
       // Return the API response as-is (it already matches the expected format)
       return {
         success: apiResponse.success !== undefined ? apiResponse.success : true,
@@ -2269,6 +2284,7 @@ export class TransactionsService {
             pageNum,
             total: 0,
           },
+          suggestPackage: relatedPackages || []
         },
       };
     } catch (error) {
@@ -2302,5 +2318,343 @@ export class TransactionsService {
         HttpStatus.BAD_REQUEST,
       );
     }
+  }
+
+  async queryExtend(queryDto: QueryEsimDto): Promise<{
+    success: boolean;
+    errorCode: string;
+    errorMsg: string | null;
+    obj: {
+      esimList: any[];
+      pager: {
+        pageSize: number;
+        pageNum: number;
+        total: number;
+      };
+      suggestPackage: any[]
+    };
+  }> {
+    // Validate access code is configured
+    if (!this.accessCode) {
+      this.logger.error('ESIM_ACCESS_CODE is not configured');
+      throw new BadRequestException('eSIM service is not properly configured');
+    }
+
+    const pageNum = queryDto.pager?.pageNum || 1;
+    const pageSize = queryDto.pager?.pageSize || 20;
+
+    // Prepare request body for eSIM Access API
+    const requestBody: any = {
+      orderNo: queryDto.orderNo || '',
+      esimTranNo: queryDto.esimTranNo || '',
+      iccid: queryDto.iccid || '',
+      pager: {
+        pageNum: pageNum,
+        pageSize: pageSize,
+      },
+    };
+
+    // Add optional date filters if provided
+    if (queryDto.startTime) {
+      requestBody.startTime = queryDto.startTime;
+    }
+    if (queryDto.endTime) {
+      requestBody.endTime = queryDto.endTime;
+    }
+
+    // Call eSIM Access API to query eSIM purchases
+    const url = `${this.apiBaseUrl}/open/esim/query`;
+    this.logger.log(
+      `Querying eSIM purchases from API: ${url} with filters: orderNo=${queryDto.orderNo || ''}, esimTranNo=${queryDto.esimTranNo || ''}, iccid=${queryDto.iccid || ''}`,
+    );
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(url, requestBody, {
+          headers: {
+            'RT-AccessCode': this.accessCode,
+            'Content-Type': 'application/json',
+          },
+          timeout: 30000, // 30 seconds timeout
+        }),
+      );
+
+      const apiResponse = response.data;
+
+      // Validate API response
+      if (!apiResponse) {
+        this.logger.error('Empty response from eSIM Access API');
+        throw new BadRequestException('Invalid response from eSIM provider');
+      }
+
+      this.logger.log(
+        `Successfully queried eSIM purchases. Found ${apiResponse.obj?.esimList?.length || 0} items`,
+      );
+
+      this.logger.log(`Location ===================>>>>>>>>>>>>>>>>>>>> ${apiResponse.obj.esimList[0].packageList[0].locationCode}`);
+      //find Related Packages and add to response
+      const relatedPackages = await this.dataPackageRepo.find({
+        where: { locationCode: apiResponse.obj.esimList[0].packageList[0].locationCode,
+          buyPrice : MoreThan(0)
+        },
+      });
+      this.logger.log(`Found ${relatedPackages.length} related packages`);
+
+      /*
+      const ac = apiResponse.obj.esimList[0].ac;
+      const parts = ac.split("$");
+      const smdp = parts[1];
+      const activationCode = parts[2];
+
+      const htmlOrder = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+
+        <p>Эрхэм харилцагч танд,</p>
+
+        <p>
+          Манай бүтээгдэхүүн үйлчилгээг сонгон захиалсан танд баярлалаа🍀 Таны eSIM-ны ХУДАЛДАН АВАЛТ-ын мэдээллийг илгээж байна.  
+          Та төхөөрөмж дээрээ идэвхжүүлэхийн тулд QR кодыг уншуулж хэрэглэнэ үү.
+        </p>
+
+        <p><strong>Уншуулах QR код:</strong></p>
+
+        <table cellpadding="10" cellspacing="0" border="0" border-spacing="0">
+          <tr>
+            <!-- QR CODE -->
+            <td style="vertical-align: top;">
+              <img 
+                src=${apiResponse.obj.esimList[0].qrCodeUrl}  
+                alt="QR Code" 
+                style="width:180px;height:180px;border:1px solid #ddd;padding:5px;"
+              />
+            </td>
+          </tr>
+          <tr>
+            <!-- INFO BOX -->
+            <td>
+              <div style="
+                background:#bfe797;
+                padding:8px;
+                border-radius:8px;
+                width:400px;
+                font-size:14px;
+              ">
+                <p style="line-height:50%;"><strong>Захиалгын дугаар(Batch ID):</strong> ${apiResponse.obj.esimList[0].orderNo}</p>
+                <p style="line-height:50%;"><strong>eSIM дугаар:</strong> ${apiResponse.obj.esimList[0].esimTranNo}</p>
+                <p style="line-height:50%;"><strong>Багцын нэр:</strong> ${apiResponse.obj.esimList[0].packageList[0].packageName}</p>
+                <p style="line-height:50%;"><strong>Хүчинтэй хугацаа:</strong> ${apiResponse.obj.esimList[0].expiredTime}</p>
+
+                <p style=" style="line-height:50%;display:inline"">
+                  <strong>SM-DP+ Хаяг:</strong>
+                  <a href=${smdp} target="_blank">
+                    ${smdp}
+                  </a>
+                </p>
+
+                <p style="line-height:50%"><strong>Идэвхжүүлэх Код:</strong> ${activationCode}</p>
+
+                <p style="line-height:50%">
+                  <strong>APN:</strong>
+                  <a href=${apiResponse.obj.esimList[0].apn} target="_blank">${apiResponse.obj.esimList[0].apn}</a>
+                </p>
+              </div>
+            </td>
+          </tr>
+        </table>
+
+        <p style="margin-top:20px;">
+          Мөн дараах QR кодоор суулгаж болно:  
+          <a href="${apiResponse.obj.esimList[0].shortUrl}" target="_blank">${apiResponse.obj.esimList[0].shortUrl}</a>
+        </p>
+
+        <hr style="margin-top:20px;" />
+        <p>Хүндэтгэсэн,</p>
+        <strong><p style="color: #34a04b;">GOY eSIM</p></strong>
+      </div>
+      `;
+
+      const htmlTopup = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+
+        <p>Эрхэм харилцагч танд,</p>
+
+        <p>
+          Манай бүтээгдэхүүн үйлчилгээг сонгон захиалсан танд баярлалаа🍀 Таны eSIM-ны ЦЭНЭГЛЭЛТ_ийн мэдээллийг илгээж байна.  
+          Та төхөөрөмж дээрээ идэвхжүүлэхийн тулд QR кодыг уншуулж хэрэглэнэ үү.
+        </p>
+
+        <p><strong>Уншуулах QR код:</strong></p>
+
+        <table cellpadding="10" cellspacing="0" border="0" border-spacing="0">
+          <tr>
+            <!-- QR CODE -->
+            <td style="vertical-align: top;">
+              <img 
+                src=${apiResponse.obj.esimList[0].qrCodeUrl}  
+                alt="QR Code" 
+                style="width:180px;height:180px;border:1px solid #ddd;padding:5px;"
+              />
+            </td>
+          </tr>
+          <tr>
+            <!-- INFO BOX -->
+            <td>
+              <div style="
+                background:#bfe797;
+                padding:8px;
+                border-radius:8px;
+                width:400px;
+                font-size:14px;
+              ">
+                <p style="line-height:50%;"><strong>Захиалгын дугаар(Batch ID):</strong> ${apiResponse.obj.esimList[0].orderNo}</p>
+                <p style="line-height:50%;"><strong>eSIM дугаар:</strong> ${apiResponse.obj.esimList[0].esimTranNo}</p>
+                <p style="line-height:50%;"><strong>Багцын нэр:</strong> ${apiResponse.obj.esimList[0].packageList[0].packageName}</p>
+                <p style="line-height:50%;"><strong>Хүчинтэй хугацаа:</strong> ${apiResponse.obj.esimList[0].expiredTime}</p>
+
+                <p style=" style="line-height:50%;display:inline"">
+                  <strong>SM-DP+ Хаяг:</strong>
+                  <a href=${smdp} target="_blank">
+                    ${smdp}
+                  </a>
+                </p>
+
+                <p style="line-height:50%"><strong>Идэвхжүүлэх Код:</strong> ${activationCode}</p>
+
+                <p style="line-height:50%">
+                  <strong>APN:</strong>
+                  <a href=${apiResponse.obj.esimList[0].apn} target="_blank">${apiResponse.obj.esimList[0].apn}</a>
+                </p>
+              </div>
+            </td>
+          </tr>
+        </table>
+
+        <p style="margin-top:20px;">
+          Мөн дараах QR кодоор суулгаж болно:  
+          <a href="${apiResponse.obj.esimList[0].shortUrl}" target="_blank">${apiResponse.obj.esimList[0].shortUrl}</a>
+        </p>
+
+        <hr style="margin-top:20px;" />
+        <p>Хүндэтгэсэн,</p>
+        <strong><p style="color: #34a04b;">GOY eSIM</p></strong>
+      </div>
+      `;
+
+      await this.mailService.sendMail('javhaa08@gmail.com','Goy SIM test', htmlOrder);
+      */
+
+      // Return the API response as-is (it already matches the expected format)
+      return {
+        success: apiResponse.success !== undefined ? apiResponse.success : true,
+        errorCode: apiResponse.errorCode || '0',
+        errorMsg: apiResponse.errorMsg || null,
+        obj: {
+          esimList: apiResponse.obj?.esimList || [],
+          pager: apiResponse.obj?.pager || {
+            pageSize,
+            pageNum,
+            total: 0,
+          },
+          suggestPackage: relatedPackages || []
+        },
+      };
+    } catch (error) {
+      const axiosError = error as AxiosError;
+      this.logger.error(
+        `eSIM query API call failed: ${axiosError.message}`,
+        axiosError.stack,
+      );
+
+      // Extract error message from response if available
+      let errorMessage = 'Failed to query eSIM purchases';
+      if (axiosError.response?.data) {
+        const errorData = axiosError.response.data as any;
+        errorMessage =
+          errorData.errorMsg ||
+          errorData.message ||
+          `API Error: ${axiosError.response.status}`;
+      } else if (
+        axiosError.code === 'ECONNABORTED' ||
+        axiosError.message.includes('timeout')
+      ) {
+        errorMessage = 'eSIM provider API request timed out';
+      }
+
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.BAD_REQUEST,
+          message: errorMessage,
+          error: 'eSIM Query Failed',
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
+  /**
+   * Process customer topup
+   * 1. Create/Find Customer
+   * 2. Create QPay Invoice
+   * 3. Save EsimInvoice
+   */
+  async processCustomerTopup(dto: CustomerPurchaseDto): Promise<any> {
+    // 1. Find or Create Customer
+    let customer = await this.customerRepository.findOne({
+      where: { phoneNumber: dto.phoneNumber },
+    });
+
+    if (!customer) {
+      customer = this.customerRepository.create({
+        phoneNumber: dto.phoneNumber,
+        email: dto.email,
+      });
+      customer = await this.customerRepository.save(customer);
+    } else {
+      // Update email if changed
+      if (dto.email && customer.email !== dto.email) {
+        customer.email = dto.email;
+        customer = await this.customerRepository.save(customer);
+      }
+    }
+
+    // 2. Create QPay Invoice
+    // Generate unique sender_invoice_no
+    const senderInvoiceNo = `CUSTOMER-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+    const invoiceRequest: any = {
+      sender_invoice_no: senderInvoiceNo,
+      invoice_receiver_code: dto.phoneNumber,
+      invoice_description: dto.description || 'Customer eSIM Topup',
+      amount: dto.amount,
+      callback_url: `${process.env.API_URL || 'http://localhost:3000'}/customer/transactions/callback/${senderInvoiceNo}`,
+      invoice_receiver_data: {
+        register: '',
+        name: dto.email.split('@')[0],
+        email: dto.email,
+        phone: dto.phoneNumber,
+      },
+    };
+
+    const qpayResponse =
+      await this.qpayConnectionService.createInvoice(invoiceRequest);
+
+    // 3. Save EsimInvoice
+    const esimInvoice = this.esimInvoiceRepository.create({
+      amount: dto.amount,
+      senderInvoiceNo: senderInvoiceNo,
+      qpayInvoiceId: qpayResponse.invoice_id,
+      status: 'PENDING',
+      customer: customer,
+      invoiceData: qpayResponse,
+      packageCode: dto.packageCode,
+    });
+
+    await this.esimInvoiceRepository.save(esimInvoice);
+
+    return {
+      ...qpayResponse,
+      customerId: customer.id,
+      internalInvoiceId: esimInvoice.id,
+    };
   }
 }

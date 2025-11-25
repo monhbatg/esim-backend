@@ -15,6 +15,7 @@ import { CustomerPurchaseDto } from './dto/customer-purchase.dto';
 import { CustomerLookupDto } from './dto/customer-lookup.dto';
 import { CustomerDataResponseDto } from './dto/customer-data-response.dto';
 import { TransactionsService } from './transactions.service';
+import { CustomerTopupDto } from './dto/customer-topup.dto';
 
 @ApiTags('customer-transactions')
 @Controller('customer/transactions')
@@ -58,5 +59,19 @@ export class CustomerTransactionsController {
       query.phoneNumber,
     );
     return data;
+  }
+
+  @Post('purchase')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Customer purchase eSIM',
+    description: 'Create QPay invoice for customer',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Invoice created successfully',
+  })
+  async topup(@Body(ValidationPipe) dto: CustomerTopupDto): Promise<any> {
+    return await this.transactionsService.processCustomerTopup(dto);
   }
 }

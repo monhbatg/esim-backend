@@ -12,6 +12,7 @@ import { SystemConfig } from '../../entities/system-config.entity';
 import { TopupEsim } from '../dto/esimtopup.resquest.dto';
 import { InvoiceRequest } from '../dto/invoice.request.dto';
 import { TokenResponse } from '../dto/token.response.dto';
+import { MailService } from './mail.service';
 
 interface InvoiceResponse {
   invoice_id: string;
@@ -93,13 +94,14 @@ export class QpayConnectionService {
       this.logger.log(`Token fetched successfully ${tokenData.access_token}`);
 
       // Save to DB
-      const expiresIn = tokenData.expires_in || 3600; // Default to 1 hour if expires_in is missing
-      const expiresAt = new Date(now.getTime() + expiresIn * 1000);
+      //const expiresIn = tokenData.expires_in || 3600; // Default to 1 hour if expires_in is missing
+      const expiresAt = new Date(now.getTime() + 3600000);
 
       await this.configRepo.save({
         key: configKey,
         value: JSON.stringify(tokenData),
         expiresAt: expiresAt,
+        updatedAt: new Date()
       });
 
       return tokenData;
@@ -209,35 +211,6 @@ export class QpayConnectionService {
     }
   }
 
-  async orderEsim() {
-    const url = `${this.apiBaseUrl}/open/esim/order`;
-    this.logger.log(`Fetching data packages from: ${url}`);
-    const response: any = await firstValueFrom(
-      this.httpService.post<ApiResponse>(
-        url,
-        {
-          transactionId: `GOY_SIM-2025111511`,
-          amount: 17000,
-          packageInfoList: [
-            {
-              packageCode: 'JC053',
-              count: 1,
-              price: 17000,
-            },
-          ],
-        },
-        {
-          headers: {
-            'RT-AccessCode': this.accessCode,
-            'Content-Type': 'application/json',
-          },
-        },
-      ),
-    );
-    const data: ApiResponse = response.data;
-    return data;
-  }
-
   async topupEsim(body: TopupEsim): Promise<ApiResponse> {
     const url = `${this.apiBaseUrl}/open/esim/topup`;
     this.logger.log(`Fetching data packages from: ${url}`);
@@ -259,6 +232,10 @@ export class QpayConnectionService {
       ),
     );
     const data: ApiResponse = response.data;
+    //Topup response deerees dahin myEsim duudaad tuuneese  dahij bichiltee barij awaad  esim_purchases table ruu log bichih 
+    //heregtei bolj baina ter hesgiig ene hesegt hiij hugjuulne eswel controller heseg deer tuhain logic uildiig hiih heregtei bolno
+    
+    //await this.mailService.sendMail('btbaadii0916@gmail.com','Hi', 'Hi');
     return data;
   }
 }

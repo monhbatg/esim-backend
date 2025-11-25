@@ -91,8 +91,5 @@ export class CustomerDataResponseDto {
 
   @ApiProperty({ type: [InvoiceResponseDto] })
   activeInvoices: InvoiceResponseDto[];
-
-  @ApiProperty({ type: [ESimPurchaseResponseDto] })
-  purchasedSimCards: ESimPurchaseResponseDto[];
 }
 
