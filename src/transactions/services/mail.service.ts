@@ -2,17 +2,15 @@ import nodemailer from 'nodemailer';
 
 export class MailService {
   private transporter;
+  private readonly mailUser = process.env.MAIL_USER;
+  private readonly mailPass = process.env.MAIL_APP_PASS;
 
   constructor() {
-    if (!process.env.MAIL_USER || !process.env.MAIL_APP_PASS) {
-      console.error('❌ Missing MAIL_USER or MAIL_APP_PASS in .env');
-    }
-
     this.transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: process.env.MAIL_USER,
-        pass: process.env.MAIL_APP_PASS,
+        user: this.mailUser,
+        pass: this.mailPass,
       },
       tls: {
         rejectUnauthorized: false,
@@ -22,7 +20,7 @@ export class MailService {
 
   async sendMail(to: string, subject: string, html: string) {
     const mailOptions = {
-      from: process.env.MAIL_USER,
+      from: this.mailUser,
       to,
       subject,
       html,

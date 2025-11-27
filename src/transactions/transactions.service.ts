@@ -13,7 +13,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { AxiosError } from 'axios';
+import { AxiosError, HttpStatusCode } from 'axios';
 import { firstValueFrom } from 'rxjs';
 import { DataSource, EntityManager, In, MoreThan, Repository } from 'typeorm';
 import { Customer } from '../entities/customer.entity';
@@ -36,6 +36,50 @@ import { QueryEsimDto } from './dto/query-esim.dto';
 import { QpayConnectionService } from './services/qpay.connection.service';
 import { DataPackageEntity } from 'src/entities/data-packages.entity';
 import { MailService } from './services/mail.service';
+
+export interface EsimItem {
+  esimTranNo: string;
+  orderNo: string;
+  transactionId: string;
+  imsi: string;
+  iccid: string;
+  smsStatus: number;
+  msisdn: string;
+  ac: string;
+  qrCodeUrl: string;
+  shortUrl: string;
+  smdpStatus: string;
+  eid: string;
+  activeType: number;
+  dataType: number;
+  activateTime: string;
+  expiredTime: string;
+  installationTime: string;
+  totalVolume: number;
+  totalDuration: number;
+  durationUnit: string;
+  orderUsage: number;
+  esimStatus: string;
+  pin: string;
+  puk: string;
+  apn: string;
+  ipExport: string;
+  supportTopUpType: number;
+  fupPolicy: string;
+  packageList: EsimPackage[];
+}
+
+export interface EsimPackage {
+  packageName: string;
+  packageCode: string;
+  slug: string;
+  duration: number;
+  volume: number;
+  locationCode: string;
+  createTime: string;
+  esimTranNo: string;
+  transactionId: string;
+}
 
 @Injectable()
 export class TransactionsService {
@@ -2199,7 +2243,7 @@ export class TransactionsService {
     errorCode: string;
     errorMsg: string | null;
     obj: {
-      esimList: any[];
+      esimList: EsimItem[];
       pager: {
         pageSize: number;
         pageNum: number;
@@ -2400,148 +2444,8 @@ export class TransactionsService {
       });
       this.logger.log(`Found ${relatedPackages.length} related packages`);
 
-      /*
-      const ac = apiResponse.obj.esimList[0].ac;
-      const parts = ac.split("$");
-      const smdp = parts[1];
-      const activationCode = parts[2];
-
-      const htmlOrder = `
-      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-
-        <p>Эрхэм харилцагч танд,</p>
-
-        <p>
-          Манай бүтээгдэхүүн үйлчилгээг сонгон захиалсан танд баярлалаа🍀 Таны eSIM-ны ХУДАЛДАН АВАЛТ-ын мэдээллийг илгээж байна.  
-          Та төхөөрөмж дээрээ идэвхжүүлэхийн тулд QR кодыг уншуулж хэрэглэнэ үү.
-        </p>
-
-        <p><strong>Уншуулах QR код:</strong></p>
-
-        <table cellpadding="10" cellspacing="0" border="0" border-spacing="0">
-          <tr>
-            <!-- QR CODE -->
-            <td style="vertical-align: top;">
-              <img 
-                src=${apiResponse.obj.esimList[0].qrCodeUrl}  
-                alt="QR Code" 
-                style="width:180px;height:180px;border:1px solid #ddd;padding:5px;"
-              />
-            </td>
-          </tr>
-          <tr>
-            <!-- INFO BOX -->
-            <td>
-              <div style="
-                background:#bfe797;
-                padding:8px;
-                border-radius:8px;
-                width:400px;
-                font-size:14px;
-              ">
-                <p style="line-height:50%;"><strong>Захиалгын дугаар(Batch ID):</strong> ${apiResponse.obj.esimList[0].orderNo}</p>
-                <p style="line-height:50%;"><strong>eSIM дугаар:</strong> ${apiResponse.obj.esimList[0].esimTranNo}</p>
-                <p style="line-height:50%;"><strong>Багцын нэр:</strong> ${apiResponse.obj.esimList[0].packageList[0].packageName}</p>
-                <p style="line-height:50%;"><strong>Хүчинтэй хугацаа:</strong> ${apiResponse.obj.esimList[0].expiredTime}</p>
-
-                <p style=" style="line-height:50%;display:inline"">
-                  <strong>SM-DP+ Хаяг:</strong>
-                  <a href=${smdp} target="_blank">
-                    ${smdp}
-                  </a>
-                </p>
-
-                <p style="line-height:50%"><strong>Идэвхжүүлэх Код:</strong> ${activationCode}</p>
-
-                <p style="line-height:50%">
-                  <strong>APN:</strong>
-                  <a href=${apiResponse.obj.esimList[0].apn} target="_blank">${apiResponse.obj.esimList[0].apn}</a>
-                </p>
-              </div>
-            </td>
-          </tr>
-        </table>
-
-        <p style="margin-top:20px;">
-          Мөн дараах QR кодоор суулгаж болно:  
-          <a href="${apiResponse.obj.esimList[0].shortUrl}" target="_blank">${apiResponse.obj.esimList[0].shortUrl}</a>
-        </p>
-
-        <hr style="margin-top:20px;" />
-        <p>Хүндэтгэсэн,</p>
-        <strong><p style="color: #34a04b;">GOY eSIM</p></strong>
-      </div>
-      `;
-
-      const htmlTopup = `
-      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-
-        <p>Эрхэм харилцагч танд,</p>
-
-        <p>
-          Манай бүтээгдэхүүн үйлчилгээг сонгон захиалсан танд баярлалаа🍀 Таны eSIM-ны ЦЭНЭГЛЭЛТ_ийн мэдээллийг илгээж байна.  
-          Та төхөөрөмж дээрээ идэвхжүүлэхийн тулд QR кодыг уншуулж хэрэглэнэ үү.
-        </p>
-
-        <p><strong>Уншуулах QR код:</strong></p>
-
-        <table cellpadding="10" cellspacing="0" border="0" border-spacing="0">
-          <tr>
-            <!-- QR CODE -->
-            <td style="vertical-align: top;">
-              <img 
-                src=${apiResponse.obj.esimList[0].qrCodeUrl}  
-                alt="QR Code" 
-                style="width:180px;height:180px;border:1px solid #ddd;padding:5px;"
-              />
-            </td>
-          </tr>
-          <tr>
-            <!-- INFO BOX -->
-            <td>
-              <div style="
-                background:#bfe797;
-                padding:8px;
-                border-radius:8px;
-                width:400px;
-                font-size:14px;
-              ">
-                <p style="line-height:50%;"><strong>Захиалгын дугаар(Batch ID):</strong> ${apiResponse.obj.esimList[0].orderNo}</p>
-                <p style="line-height:50%;"><strong>eSIM дугаар:</strong> ${apiResponse.obj.esimList[0].esimTranNo}</p>
-                <p style="line-height:50%;"><strong>Багцын нэр:</strong> ${apiResponse.obj.esimList[0].packageList[0].packageName}</p>
-                <p style="line-height:50%;"><strong>Хүчинтэй хугацаа:</strong> ${apiResponse.obj.esimList[0].expiredTime}</p>
-
-                <p style=" style="line-height:50%;display:inline"">
-                  <strong>SM-DP+ Хаяг:</strong>
-                  <a href=${smdp} target="_blank">
-                    ${smdp}
-                  </a>
-                </p>
-
-                <p style="line-height:50%"><strong>Идэвхжүүлэх Код:</strong> ${activationCode}</p>
-
-                <p style="line-height:50%">
-                  <strong>APN:</strong>
-                  <a href=${apiResponse.obj.esimList[0].apn} target="_blank">${apiResponse.obj.esimList[0].apn}</a>
-                </p>
-              </div>
-            </td>
-          </tr>
-        </table>
-
-        <p style="margin-top:20px;">
-          Мөн дараах QR кодоор суулгаж болно:  
-          <a href="${apiResponse.obj.esimList[0].shortUrl}" target="_blank">${apiResponse.obj.esimList[0].shortUrl}</a>
-        </p>
-
-        <hr style="margin-top:20px;" />
-        <p>Хүндэтгэсэн,</p>
-        <strong><p style="color: #34a04b;">GOY eSIM</p></strong>
-      </div>
-      `;
-
-      await this.mailService.sendMail('javhaa08@gmail.com','Goy SIM test', htmlOrder);
-      */
+      const orderHtml = this.OrderMailBuilder(apiResponse);
+      await this.mailService.sendMail('javhaa08@gmail.com','Goy SIM test', orderHtml);
 
       // Return the API response as-is (it already matches the expected format)
       return {
@@ -2647,6 +2551,7 @@ export class TransactionsService {
       customer: customer,
       invoiceData: qpayResponse,
       packageCode: dto.packageCode,
+      iccId: dto.iccId
     });
 
     await this.esimInvoiceRepository.save(esimInvoice);
@@ -2656,5 +2561,667 @@ export class TransactionsService {
       customerId: customer.id,
       internalInvoiceId: esimInvoice.id,
     };
+  }
+
+
+  /////////////////////////////////////////////
+
+  async topupEsim(invoiceId: string): Promise<Record<string, unknown>> {
+
+  // Check invoice status from QPay
+      const invoiceStatus = (await this.qpayConnectionService.checkInvoice(
+        invoiceId,
+      )) as {
+        count: number;
+        rows?: Array<{ payment_status: string }>;
+        [key: string]: unknown;
+      };
+  
+      // Check if invoice is paid
+      const isPaid =
+        invoiceStatus.count > 0 &&
+        invoiceStatus.rows?.some(
+          (row: { payment_status: string }) => row.payment_status === 'PAID',
+        );
+  
+      if (isPaid) {
+        // Find the EsimInvoice record by QPay invoice ID
+        // Note: qpayInvoiceId is the external QPay payment system ID
+        // esimInvoice.id is our internal database UUID
+        const esimInvoice =
+          await this.getEsimInvoiceByQpayId(invoiceId);
+  
+        if (esimInvoice && esimInvoice.packageCode) {
+          // Check if already processed
+          if (
+            esimInvoice.status !== 'PROCESSED' &&
+            esimInvoice.status !== 'PAID'
+          ) {
+            try {
+              // Inquire eSIM package details from API using packageCode
+              this.logger.log(
+                `Fetching eSIM package details for packageCode: ${esimInvoice.packageCode}`,
+              );
+              const packages =
+                await this.getPackageDetailsByCode(
+                  esimInvoice.packageCode,
+                );
+  
+              if (!packages || packages.length === 0) {
+                throw new NotFoundException(
+                  `Package not found for packageCode: ${esimInvoice.packageCode}`,
+                );
+              }
+  
+              const packageDetails = packages[0];
+              if (!packageDetails) {
+                throw new NotFoundException(
+                  `Package details not found for packageCode: ${esimInvoice.packageCode}`,
+                );
+              }
+  
+              this.logger.log(
+                `Found package: ${packageDetails.name}, Price: ${packageDetails.price} ${packageDetails.currencyCode}`,
+              );
+  
+              // Use price from API response (already in API format)
+              // API price is in units where 10000 = $1.00
+              const packagePrice = Number(packageDetails.price);
+  
+              const orderEsimDto = {
+                transactionId: undefined, // Will be auto-generated (eSIM order transaction ID)
+                amount: packagePrice,
+                packageInfoList: [
+                  {
+                    packageCode: esimInvoice.packageCode,
+                    count: 1,
+                    price: packagePrice,
+                  },
+                ],
+              };
+  
+              // Place eSIM order
+              // Note: orderEsimForCustomer already updates the invoice status to 'PAID'
+              // and creates ESimPurchase records, so no need to update status again
+              const orderResult =
+                await this.topupEsimForCustomer(
+                  invoiceId, // Pass QPay invoice ID
+                  orderEsimDto,
+                );
+
+              // Get orderNo from ESimPurchase records if available (more reliable)
+              let esimOrderNo = orderResult.orderNo;
+              try {
+                const purchases =
+                  await this.getEsimPurchasesByInvoiceId(
+                    esimInvoice.id,
+                  );
+                if (purchases.length > 0 && purchases[0].orderNo) {
+                  esimOrderNo = purchases[0].orderNo;
+                }
+              } catch (error) {
+                // If we can't get from purchases, use orderResult.orderNo
+                this.logger.warn(
+                  `Could not retrieve orderNo from purchases, using orderResult: ${error instanceof Error ? error.message : 'Unknown'}`,
+                );
+              }
+  
+              return {
+                ...invoiceStatus,
+                orderPlaced: true,
+                orderNo: esimOrderNo || orderResult.orderNo || null,
+                transactionId: orderResult.transactionId,
+                message: 'Invoice paid and eSIM order placed successfully',
+              };
+            } catch (error) {
+              this.logger.error(
+                `Failed to place eSIM order for invoice (QPay ID: ${invoiceId}, Internal ID: ${esimInvoice.id}): ${error instanceof Error ? error.message : 'Unknown error'}`,
+              );
+  
+              // Try to get orderNo from ESimPurchase records even if order failed
+              let esimOrderNo: string | null = null;
+              try {
+                const purchases =
+                  await this.getEsimPurchasesByInvoiceId(
+                    esimInvoice.id,
+                  );
+                if (purchases.length > 0 && purchases[0].orderNo) {
+                  esimOrderNo = purchases[0].orderNo;
+                }
+              } catch {
+                // Ignore error, orderNo will be null
+              }
+  
+              // Return invoice status even if order fails
+              return {
+                ...invoiceStatus,
+                orderPlaced: false,
+                orderNo: esimOrderNo || null,
+                error:
+                  error instanceof Error
+                    ? error.message
+                    : 'Failed to place eSIM order',
+                message: 'Invoice is paid but eSIM order failed',
+              };
+            }
+          } else {
+            // Already processed
+            const invoiceData = esimInvoice.invoiceData as
+              | { orderNo?: string }
+              | undefined;
+  
+            // Try to get orderNo from ESimPurchase records
+            let esimOrderNo = invoiceData?.orderNo;
+            try {
+              const purchases =
+                await this.getEsimPurchasesByInvoiceId(
+                  esimInvoice.id,
+                );
+              if (purchases.length > 0 && purchases[0].orderNo) {
+                esimOrderNo = purchases[0].orderNo;
+              }
+            } catch (error) {
+              // If we can't get from purchases, use invoiceData.orderNo
+              this.logger.warn(
+                `Could not retrieve orderNo from purchases for already processed invoice: ${error instanceof Error ? error.message : 'Unknown'}`,
+              );
+            }
+  
+            return {
+              ...invoiceStatus,
+              orderPlaced: true,
+              alreadyProcessed: true,
+              orderNo: esimOrderNo || null,
+              message: 'Invoice already processed',
+            };
+          }
+        }
+      }
+  
+      // Return invoice status (not paid or no invoice found)
+      // Try to get orderNo even if invoice not found or not paid
+      let esimOrderNo: string | null = null;
+      if (isPaid) {
+        try {
+          const esimInvoice =
+            await this.getEsimInvoiceByQpayId(invoiceId);
+          if (esimInvoice) {
+            // Try to get orderNo from ESimPurchase records
+            try {
+              const purchases =
+                await this.getEsimPurchasesByInvoiceId(
+                  esimInvoice.id,
+                );
+              if (purchases.length > 0 && purchases[0].orderNo) {
+                esimOrderNo = purchases[0].orderNo;
+              } else {
+                // Try from invoiceData
+                const invoiceData = esimInvoice.invoiceData as
+                  | { orderNo?: string }
+                  | undefined;
+                if (invoiceData?.orderNo) {
+                  esimOrderNo = invoiceData.orderNo;
+                }
+              }
+            } catch {
+              // Try from invoiceData as fallback
+              const invoiceData = esimInvoice.invoiceData as
+                | { orderNo?: string }
+                | undefined;
+              if (invoiceData?.orderNo) {
+                esimOrderNo = invoiceData.orderNo;
+              }
+            }
+          }
+        } catch {
+          // Ignore error, orderNo will be null
+        }
+      }
+  
+      // Return invoice status (not paid or no invoice found)
+      return {
+        ...invoiceStatus,
+        orderPlaced: false,
+        orderNo: esimOrderNo || null,
+        message: isPaid
+          ? 'Invoice paid but no eSIM invoice found'
+          : 'Invoice not paid yet',
+      };
+    //Topup response deerees dahin myEsim duudaad tuuneese  dahij bichiltee barij awaad  esim_purchases table ruu log bichih 
+    //heregtei bolj baina ter hesgiig ene hesegt hiij hugjuulne eswel controller heseg deer tuhain logic uildiig hiih heregtei bolno
+    
+    //await this.mailService.sendMail('btbaadii0916@gmail.com','Hi', 'Hi');
+    //return data;
+  }
+
+  async topupEsimForCustomer(
+    qpayInvoiceId: string,
+    orderEsimDto: OrderEsimDto,
+  ): Promise<{
+    orderNo: string;
+    transactionId: string;
+    amount: number;
+  }> {
+    // Validate access code is configured
+    if (!this.accessCode) {
+      this.logger.error('ESIM_ACCESS_CODE is not configured');
+      throw new BadRequestException('eSIM service is not properly configured');
+    }
+
+    // Generate eSIM order transaction ID if not provided
+    // This is used for the eSIM API order, not the same as Transaction entity
+    let esimOrderTransactionId = orderEsimDto.transactionId;
+    if (!esimOrderTransactionId) {
+      esimOrderTransactionId = this.generateTransactionId();
+      // Ensure uniqueness (retry if collision - extremely rare)
+      let attempts = 0;
+      while (
+        (await this.transactionRepository.findOne({
+          where: { transactionId: esimOrderTransactionId },
+        })) &&
+        attempts < 10
+      ) {
+        esimOrderTransactionId = this.generateTransactionId();
+        attempts++;
+      }
+    }
+
+    // Find the EsimInvoice by QPay invoice ID
+    // Note: qpayInvoiceId is the external QPay system ID, esimInvoice.id is our internal database ID
+    const esimInvoice = await this.esimInvoiceRepository.findOne({
+      where: { qpayInvoiceId: qpayInvoiceId },
+      relations: ['customer'],
+    });
+
+    if (!esimInvoice) {
+      throw new NotFoundException(
+        `Invoice not found for QPay invoice ID: ${qpayInvoiceId}`,
+      );
+    }
+
+    // Check if already processed
+    if (esimInvoice.status === 'PROCESSED' || esimInvoice.status === 'PAID') {
+      this.logger.log(
+        `Invoice (QPay ID: ${qpayInvoiceId}, Internal ID: ${esimInvoice.id}) already processed, skipping order`,
+      );
+      // Return existing order data if available
+      if (esimInvoice.invoiceData?.orderNo) {
+        return {
+          orderNo: esimInvoice.invoiceData.orderNo,
+          transactionId:
+            esimInvoice.invoiceData.transactionId || esimOrderTransactionId,
+          amount: esimInvoice.amount,
+        };
+      }
+      throw new BadRequestException('Invoice already processed');
+    }
+
+    try {
+      // Prepare request body for eSIM Access API
+      const requestBody: any = {
+        esimTranNo: "",
+        iccid: esimInvoice.iccId,
+        packageCode: `TOPUP_${esimInvoice.packageCode}`,
+        transactionId: esimOrderTransactionId
+      };
+
+      // Call eSIM Access API to place order
+      //const url = `${this.apiBaseUrl}/open/esim/order`;
+      const url = `${this.apiBaseUrl}/open/esim/topup`;
+      this.logger.log(
+        `Placing eSIM Top-up for customer invoice (QPay ID: ${qpayInvoiceId}, Internal ID: ${esimInvoice.id}), eSIM Top-up TransactionId: ${esimOrderTransactionId}`,
+      );
+
+      let topupResponse: any;
+      try {
+        const response = await firstValueFrom(
+          this.httpService.post(url, requestBody, {
+            headers: {
+              'RT-AccessCode': this.accessCode,
+              'Content-Type': 'application/json',
+            },
+            timeout: 30000, // 30 seconds timeout for order API
+          }),
+        );
+
+        topupResponse = response.data;
+        this.logger.log(
+          `eSIM Top-up API response received for invoice (QPay ID: ${qpayInvoiceId}, Internal ID: ${esimInvoice.id})`,
+        );
+      } catch (error) {
+        const axiosError = error as AxiosError;
+        this.logger.error(
+          `eSIM Top-up API call failed for invoice (QPay ID: ${qpayInvoiceId}, Internal ID: ${esimInvoice.id}): ${axiosError.message}`,
+          axiosError.stack,
+        );
+
+        // Extract error message from response if available
+        let errorMessage = 'Failed to place eSIM Top-up';
+        if (axiosError.response?.data) {
+          const errorData = axiosError.response.data as any;
+          errorMessage =
+            errorData.errorMsg ||
+            errorData.message ||
+            `API Error: ${axiosError.response.status}`;
+        } else if (
+          axiosError.code === 'ECONNABORTED' ||
+          axiosError.message.includes('timeout')
+        ) {
+          errorMessage = 'eSIM provider API request timed out';
+        }
+
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.BAD_REQUEST,
+            message: errorMessage,
+            error: 'eSIM Topup Failed',
+          },
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      // Validate API response
+      if (topupResponse.obj === null || !topupResponse.success) {
+        const errorMsg =
+          topupResponse?.errorMsg ||
+          'Top-up failed - invalid response from eSIM provider';
+        this.logger.error(
+          `eSIM Top-up failed for invoice #1 (QPay ID: ${qpayInvoiceId}, Internal ID: ${esimInvoice.id}): ${errorMsg}`,
+          JSON.stringify(topupResponse),
+        );
+
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.BAD_REQUEST,
+            message: errorMsg,
+            error: 'eSIM Topup Failed',
+          },
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      //now i need to check MY eSIM list
+      const queryData: QueryEsimDto = {
+        orderNo:"",
+        esimTranNo:"",
+        iccid: esimInvoice.iccId,
+      }
+      const currentEsim = await this.queryEsimPurchases(queryData);
+      // Extract order number from response
+      const orderNo = currentEsim.obj.esimList[0].orderNo;
+      if (!orderNo) {
+        this.logger.error(
+          `Top-up response missing transactionId for invoice (QPay ID: ${qpayInvoiceId}, Internal ID: ${esimInvoice.id})`,
+          JSON.stringify(topupResponse),
+        );
+
+        throw new BadRequestException('Top-up response missing transactionId number');
+      }
+
+      // Update EsimInvoice with order details and mark as paid (order completed)
+      // Status is set to 'PAID' since the order is placed synchronously and completes immediately
+      esimInvoice.status = 'PAID';
+      const topupResponseData = topupResponse.obj || topupResponse;
+      esimInvoice.invoiceData = {
+        ...esimInvoice.invoiceData,
+        orderNo,
+        transactionId: esimOrderTransactionId, // Store eSIM order transaction ID
+        esimOrderResponse: topupResponseData,
+        processedAt: new Date().toISOString(),
+      };
+
+      // Use a database transaction to ensure invoice is saved and committed
+      // before creating purchases. This prevents foreign key constraint violations.
+      await this.dataSource.transaction(async (manager) => {
+        // Save invoice within transaction
+        const invoiceRepository = manager.getRepository(EsimInvoice);
+        const savedInvoice = await invoiceRepository.save(esimInvoice);
+
+        // Reload invoice with customer relation within the same transaction
+        const invoiceWithCustomer = await invoiceRepository.findOne({
+          where: { id: savedInvoice.id },
+          relations: ['customer'],
+        });
+
+        if (!invoiceWithCustomer) {
+          throw new Error(
+            `Failed to reload invoice ${savedInvoice.id} after saving`,
+          );
+        }
+
+        if (!invoiceWithCustomer.customer) {
+          throw new Error(
+            `Invoice ${invoiceWithCustomer.id} does not have a customer relation`,
+          );
+        }
+
+        // Create purchases within the same transaction
+        // This ensures the invoice exists when purchases are created
+        try {
+          await this.createEsimPurchasesInTransaction(
+            topupResponseData,
+            invoiceWithCustomer,
+            esimOrderTransactionId,
+            orderEsimDto,
+            manager,
+          );
+        } catch (purchaseError) {
+          this.logger.error(
+            `Failed to create ESimPurchase records in transaction: ${purchaseError instanceof Error ? purchaseError.message : 'Unknown error'}`,
+            purchaseError instanceof Error ? purchaseError.stack : undefined,
+          );
+          // Don't throw - let transaction complete, purchases can be created later via fallback
+        }
+      });
+
+      // Try fallback method if transaction completed but purchases weren't created
+      // This handles cases where the transaction succeeded but purchase creation failed
+      try {
+        const invoiceCheck = await this.esimInvoiceRepository.findOne({
+          where: { id: esimInvoice.id },
+          relations: ['customer'],
+        });
+
+        if (invoiceCheck && invoiceCheck.customer) {
+          const existingPurchases = await this.esimPurchaseRepository.count({
+            where: { invoiceId: invoiceCheck.id },
+          });
+
+          if (existingPurchases === 0) {
+            this.logger.log(
+              `No purchases found for invoice ${invoiceCheck.id}, attempting fallback creation`,
+            );
+            // Try to get esimTranNo and iccid from invoice data (stored in esimOrderResponse)
+            const esimTranNo =
+              invoiceCheck.invoiceData?.esimOrderResponse?.esimTranNo ||
+              invoiceCheck.invoiceData?.esimOrderResponse?.obj?.esimTranNo ||
+              null;
+            const iccid =
+              invoiceCheck.invoiceData?.esimOrderResponse?.iccid ||
+              invoiceCheck.invoiceData?.esimOrderResponse?.obj?.iccid ||
+              null;
+
+            await this.createPurchasesFromPackageInfo(
+              invoiceCheck,
+              esimOrderTransactionId,
+              orderEsimDto,
+              invoiceCheck.invoiceData?.orderNo || null,
+              esimTranNo,
+              iccid,
+            );
+          }
+        }
+      } catch (fallbackError) {
+        this.logger.error(
+          `Fallback purchase creation also failed: ${fallbackError instanceof Error ? fallbackError.message : 'Unknown'}`,
+        );
+      }
+      //================ EMail Notification =================================
+      const topupHtml = this.TopupMailBuilder(currentEsim.obj.esimList);
+      await this.mailService.sendMail('javhaa08@gmail.com','Goy SIM test', topupHtml);
+      this.logger.log(
+        `eSIM Topup successful for customer invoice (QPay ID: ${qpayInvoiceId}, Internal ID: ${esimInvoice.id}), OrderNo: ${orderNo}, eSIM Order TransactionId: ${esimOrderTransactionId}`,
+      );
+      
+      return {
+        orderNo,
+        transactionId: esimOrderTransactionId,
+        amount: orderEsimDto.amount,
+      };
+    } catch (error) {
+      this.logger.error(
+        `eSIM order failed for invoice (QPay ID: ${qpayInvoiceId}, Internal ID: ${esimInvoice.id}): ${error instanceof Error ? error.message : 'Unknown'}`,
+      );
+      throw error;
+    }
+  }
+
+  TopupMailBuilder(esimList: EsimItem[]): string{
+    const ac = esimList[0].ac;
+      const parts = ac.split("$");
+      const smdp = parts[1];
+      const activationCode = parts[2];
+    const htmlTopup = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+
+        <p>Эрхэм харилцагч танд,</p>
+
+        <p>
+          Манай бүтээгдэхүүн үйлчилгээг сонгон захиалсан танд баярлалаа🍀 Таны eSIM-ны ЦЭНЭГЛЭЛТ-ийн мэдээллийг илгээж байна.  
+          Та төхөөрөмж дээрээ идэвхжүүлэхийн тулд QR кодыг уншуулж хэрэглэнэ үү.
+        </p>
+
+        <p><strong>Уншуулах QR код:</strong></p>
+
+        <table cellpadding="10" cellspacing="0" border="0" border-spacing="0">
+          <tr>
+            <!-- QR CODE -->
+            <td style="vertical-align: top;">
+              <img 
+                src=${esimList[0].qrCodeUrl}  
+                alt="QR Code" 
+                style="width:180px;height:180px;border:1px solid #ddd;padding:5px;"
+              />
+            </td>
+          </tr>
+          <tr>
+            <!-- INFO BOX -->
+            <td>
+              <div style="
+                background:#bfe797;
+                padding:8px;
+                border-radius:8px;
+                width:400px;
+                font-size:14px;
+              ">
+                <p style="line-height:50%;"><strong>Захиалгын дугаар(Batch ID):</strong> ${esimList[0].orderNo}</p>
+                <p style="line-height:50%;"><strong>eSIM дугаар:</strong> ${esimList[0].esimTranNo}</p>
+                <p style="line-height:50%;"><strong>Багцын нэр:</strong> ${esimList[0].packageList[0].packageName}</p>
+                <p style="line-height:50%;"><strong>Хүчинтэй хугацаа:</strong> ${esimList[0].expiredTime}</p>
+
+                <p style=" style="line-height:50%;display:inline"">
+                  <strong>SM-DP+ Хаяг:</strong>
+                  <a href=${smdp} target="_blank">
+                    ${smdp}
+                  </a>
+                </p>
+
+                <p style="line-height:50%"><strong>Идэвхжүүлэх Код:</strong> ${activationCode}</p>
+
+                <p style="line-height:50%">
+                  <strong>APN:</strong>
+                  <a href=${esimList[0].apn} target="_blank">${esimList[0].apn}</a>
+                </p>
+              </div>
+            </td>
+          </tr>
+        </table>
+
+        <p style="margin-top:20px;">
+          Мөн дараах QR кодоор суулгаж болно:  
+          <a href="${esimList[0].shortUrl}" target="_blank">${esimList[0].shortUrl}</a>
+        </p>
+
+        <hr style="margin-top:20px;" />
+        <p>Хүндэтгэсэн,</p>
+        <strong><p style="color: #34a04b;">GOY eSIM</p></strong>
+      </div>
+      `;
+    return htmlTopup;
+  }
+
+  OrderMailBuilder(apiResponse: any): string{
+    const ac = apiResponse.obj.esimList[0].ac;
+      const parts = ac.split("$");
+      const smdp = parts[1];
+      const activationCode = parts[2];
+
+      const htmlOrder = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+
+        <p>Эрхэм харилцагч танд,</p>
+
+        <p>
+          Манай бүтээгдэхүүн үйлчилгээг сонгон захиалсан танд баярлалаа🍀 Таны eSIM-ны ХУДАЛДАН АВАЛТ-ын мэдээллийг илгээж байна.  
+          Та төхөөрөмж дээрээ идэвхжүүлэхийн тулд QR кодыг уншуулж хэрэглэнэ үү.
+        </p>
+
+        <p><strong>Уншуулах QR код:</strong></p>
+
+        <table cellpadding="10" cellspacing="0" border="0" border-spacing="0">
+          <tr>
+            <!-- QR CODE -->
+            <td style="vertical-align: top;">
+              <img 
+                src=${apiResponse.obj.esimList[0].qrCodeUrl}  
+                alt="QR Code" 
+                style="width:180px;height:180px;border:1px solid #ddd;padding:5px;"
+              />
+            </td>
+          </tr>
+          <tr>
+            <!-- INFO BOX -->
+            <td>
+              <div style="
+                background:#bfe797;
+                padding:8px;
+                border-radius:8px;
+                width:400px;
+                font-size:14px;
+              ">
+                <p style="line-height:50%;"><strong>Захиалгын дугаар(Batch ID):</strong> ${apiResponse.obj.esimList[0].orderNo}</p>
+                <p style="line-height:50%;"><strong>eSIM дугаар:</strong> ${apiResponse.obj.esimList[0].esimTranNo}</p>
+                <p style="line-height:50%;"><strong>Багцын нэр:</strong> ${apiResponse.obj.esimList[0].packageList[0].packageName}</p>
+                <p style="line-height:50%;"><strong>Хүчинтэй хугацаа:</strong> ${apiResponse.obj.esimList[0].expiredTime}</p>
+
+                <p style=" style="line-height:50%;display:inline"">
+                  <strong>SM-DP+ Хаяг:</strong>
+                  <a href=${smdp} target="_blank">
+                    ${smdp}
+                  </a>
+                </p>
+
+                <p style="line-height:50%"><strong>Идэвхжүүлэх Код:</strong> ${activationCode}</p>
+
+                <p style="line-height:50%">
+                  <strong>APN:</strong>
+                  <a href=${apiResponse.obj.esimList[0].apn} target="_blank">${apiResponse.obj.esimList[0].apn}</a>
+                </p>
+              </div>
+            </td>
+          </tr>
+        </table>
+
+        <p style="margin-top:20px;">
+          Мөн дараах QR кодоор суулгаж болно:  
+          <a href="${apiResponse.obj.esimList[0].shortUrl}" target="_blank">${apiResponse.obj.esimList[0].shortUrl}</a>
+        </p>
+
+        <hr style="margin-top:20px;" />
+        <p>Хүндэтгэсэн,</p>
+        <strong><p style="color: #34a04b;">GOY eSIM</p></strong>
+      </div>
+      `;
+      return htmlOrder;
   }
 }

@@ -22,4 +22,10 @@ export class CustomerPurchaseDto {
   @IsString()
   @IsOptional()
   description?: string;
+
+  @ApiProperty({ example: '89852240200021225044'})
+  @IsString()
+  @IsOptional()
+  iccId?: string
+
 }

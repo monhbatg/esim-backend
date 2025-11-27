@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -898,6 +899,37 @@ export class TransactionsController {
         ? 'Invoice paid but no eSIM invoice found'
         : 'Invoice not paid yet',
     };
+  }
+
+
+  //Topup purchase check
+
+
+  @Post('checkTopup/:invoiceId')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Check QPay invoice status',
+    description:
+      'Нэхэмжлэл төлөгдсөн эсэхийг шалгах. If paid, automatically purchases the eSIM card.',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Invoice status retrieved successfully. If paid, eSIM order is placed automatically.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid invoice ID',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Invoice not found',
+  })
+  async checkTopupInvoiceStatus(
+    @Param('invoiceId') qpayInvoiceId: string, // QPay invoice ID (external payment system ID)
+  ): Promise<Record<string, unknown>> {
+    return await this.transactionsService.topupEsim(qpayInvoiceId);
   }
 
 }
