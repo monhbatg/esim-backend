@@ -68,7 +68,7 @@ export class TransactionsService {
    * Generate unique transaction ID
    * Format: TXN-YYYYMMDD-XXXXXX (e.g., TXN-20240101-A1B2C3)
    */
-  private generateTransactionId(): string {
+  public generateTransactionId(): string {
     const date = new Date();
     const dateStr = date.toISOString().split('T')[0].replace(/-/g, '');
     const randomStr = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -1281,7 +1281,7 @@ export class TransactionsService {
    * @param orderEsimDto - The order DTO with package info
    * @param manager - The EntityManager from the transaction
    */
-  private async createEsimPurchasesInTransaction(
+  public async createEsimPurchasesInTransaction(
     orderResponseData: any,
     esimInvoice: EsimInvoice,
     esimOrderTransactionId: string,
@@ -1970,7 +1970,7 @@ export class TransactionsService {
    * @param esimOrderTransactionId - The eSIM order transaction ID
    * @param orderEsimDto - The order DTO with package info
    */
-  private async createPurchasesFromPackageInfo(
+  public async createPurchasesFromPackageInfo(
     esimInvoice: EsimInvoice,
     esimOrderTransactionId: string,
     orderEsimDto: OrderEsimDto,

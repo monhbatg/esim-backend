@@ -900,32 +900,4 @@ export class TransactionsController {
     };
   }
 
-  @Post('esim/topup')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'top up esim',
-    description: 'eSIM цэнэглэх',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Invoice status retrieved successfully',
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Invalid invoice ID',
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing token',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Invoice not found',
-  })
-  async topupEsim(
-    @Request() req: AuthRequest,
-    @Body() body: esimTopupResquestDto.TopupEsim,
-  ): Promise<unknown> {
-    return await this.qpayConnectionService.topupEsim(body);
-  }
 }

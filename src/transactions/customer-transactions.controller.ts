@@ -61,7 +61,7 @@ export class CustomerTransactionsController {
     return data;
   }
 
-  @Post('purchase')
+  @Post('purchaseTopup')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Customer purchase eSIM',
