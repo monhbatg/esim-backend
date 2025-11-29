@@ -2972,7 +2972,7 @@ export class TransactionsService {
 
       // Use a database transaction to ensure invoice is saved and committed
       // before creating purchases. This prevents foreign key constraint violations.
-      await this.dataSource.transaction(async (manager) => {
+        await this.dataSource.transaction(async (manager) => {
         // Save invoice within transaction
         const invoiceRepository = manager.getRepository(EsimInvoice);
         const savedInvoice = await invoiceRepository.save(esimInvoice);
@@ -2999,7 +2999,7 @@ export class TransactionsService {
         // This ensures the invoice exists when purchases are created
         try {
           await this.createEsimPurchasesInTransaction(
-            topupResponseData,
+            currentEsim.obj.esimList[0],
             invoiceWithCustomer,
             esimOrderTransactionId,
             orderEsimDto,
@@ -3045,7 +3045,7 @@ export class TransactionsService {
               invoiceCheck,
               esimOrderTransactionId,
               orderEsimDto,
-              invoiceCheck.invoiceData?.orderNo || null,
+              orderNo,
               esimTranNo,
               iccid,
             );
@@ -3062,7 +3062,7 @@ export class TransactionsService {
       this.logger.log(
         `eSIM Topup successful for customer invoice (QPay ID: ${qpayInvoiceId}, Internal ID: ${esimInvoice.id}), OrderNo: ${orderNo}, eSIM Order TransactionId: ${esimOrderTransactionId}`,
       );
-      
+
       return {
         orderNo,
         transactionId: esimOrderTransactionId,
@@ -3213,7 +3213,7 @@ export class TransactionsService {
         </table>
 
         <p style="margin-top:20px;">
-          Мөн дараах QR кодоор суулгаж болно:  
+          Мөн дараах холбоосыг ашиглан QR кодоо суулгах болон дата хэрэглээгээ хянах боломжтой:  
           <a href="${apiResponse.obj.esimList[0].shortUrl}" target="_blank">${apiResponse.obj.esimList[0].shortUrl}</a>
         </p>
 
