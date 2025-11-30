@@ -93,8 +93,7 @@ export class QpayConnectionService {
       this.logger.log(`Token fetched successfully ${tokenData.access_token}`);
 
       // Save to DB
-      const expiresIn = 86400; // Default 24 hours token life time
-      const expiresAt = new Date(now.getTime() + expiresIn * 1000);
+      const expiresAt = new Date(now.getTime() + 86400 * 1000);  // 24 hours token life time
 
       await this.configRepo.save({
         key: configKey,
