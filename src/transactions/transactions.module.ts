@@ -14,6 +14,8 @@ import { AuthModule } from '../auth/auth.module';
 import { QpayConnectionService } from './services/qpay.connection.service';
 import { SystemConfig } from '../entities/system-config.entity';
 import { InquiryModule } from '../inquiry/inquiry.module';
+import { MailService } from './services/mail.service';
+import { User } from 'src/entities/user.entity';
 
 @Module({
   imports: [
@@ -24,13 +26,14 @@ import { InquiryModule } from '../inquiry/inquiry.module';
       Customer,
       EsimInvoice,
       SystemConfig, // SystemConfig entity for QPay token caching
+      User
     ]),
     WalletModule, // Import WalletModule to use WalletService
     forwardRef(() => AuthModule), // Import AuthModule to access TokenBlacklistService for JwtAuthGuard
     forwardRef(() => InquiryModule), // Import InquiryModule to use InquiryPackagesService
   ],
   controllers: [TransactionsController, CustomerTransactionsController, OpenEsimController],
-  providers: [TransactionsService, QpayConnectionService],
-  exports: [TransactionsService, QpayConnectionService], // Export for use in other modules if needed
+  providers: [TransactionsService, QpayConnectionService, MailService],
+  exports: [TransactionsService, QpayConnectionService, MailService], // Export for use in other modules if needed
 })
 export class TransactionsModule {}

@@ -34,6 +34,8 @@ import { PurchaseEsimDto } from './dto/purchase-esim.dto';
 import { QueryTransactionsDto } from './dto/query-transactions.dto';
 import { QueryEsimDto } from './dto/query-esim.dto';
 import { QpayConnectionService } from './services/qpay.connection.service';
+import { MailService } from './services/mail.service';
+import { User } from 'src/entities/user.entity';
 
 @Injectable()
 export class TransactionsService {
@@ -57,6 +59,9 @@ export class TransactionsService {
     private readonly qpayConnectionService: QpayConnectionService,
     @Inject(forwardRef(() => InquiryPackagesService))
     private readonly inquiryPackagesService: InquiryPackagesService,
+    private readonly mailService: MailService,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>
   ) {}
 
   /**
@@ -2256,6 +2261,31 @@ export class TransactionsService {
       this.logger.log(
         `Successfully queried eSIM purchases. Found ${apiResponse.obj?.esimList?.length || 0} items`,
       );
+      
+      const esimPurchase = await this.esimPurchaseRepository.findOne({where: { orderNo: queryDto.orderNo}})
+      let sendEmailAccount ='';
+      if(esimPurchase){
+        if(esimPurchase.customerId){
+          const sendEmail = await this.customerRepository.findOne({ where: { id: esimPurchase.customerId }});
+          if (!sendEmail) 
+            throw new Error(`Customer ${esimPurchase.customerId} not found in transaction`);
+          else
+            sendEmailAccount = sendEmail.email;
+        }else{
+          if(esimPurchase.userId){
+            const sendEmail = await this.userRepository.findOne({ where: { id: esimPurchase.userId}});
+            if (!sendEmail) 
+              throw new Error(`User ${esimPurchase.userId} not found in transaction`);
+            else
+              sendEmailAccount = sendEmail?.email;
+          }else{
+            throw new Error(`User ${esimPurchase.userId} not found in transaction`);
+          }
+        
+        }
+      }
+      const orderHtml = this.OrderMailBuilder(apiResponse);
+      await this.mailService.sendMail(sendEmailAccount,'Goy eSIM purchase', orderHtml);
 
       // Return the API response as-is (it already matches the expected format)
       return {
@@ -2302,5 +2332,80 @@ export class TransactionsService {
         HttpStatus.BAD_REQUEST,
       );
     }
+  }
+
+  OrderMailBuilder(apiResponse: any): string{
+    const ac = apiResponse.obj.esimList[0].ac;
+      const parts = ac.split("$");
+      const smdp = parts[1];
+      const activationCode = parts[2];
+
+      const htmlOrder = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+
+        <p>Эрхэм харилцагч танд,</p>
+
+        <p>
+          Манай бүтээгдэхүүн үйлчилгээг сонгон захиалсан танд баярлалаа🍀 Таны eSIM-ны ХУДАЛДАН АВАЛТ-ын мэдээллийг илгээж байна.  
+          Та төхөөрөмж дээрээ идэвхжүүлэхийн тулд QR кодыг уншуулж хэрэглэнэ үү.
+        </p>
+
+        <p><strong>Уншуулах QR код:</strong></p>
+
+        <table cellpadding="10" cellspacing="0" border="0" border-spacing="0">
+          <tr>
+            <!-- QR CODE -->
+            <td style="vertical-align: top;">
+              <img 
+                src=${apiResponse.obj.esimList[0].qrCodeUrl}  
+                alt="QR Code" 
+                style="width:180px;height:180px;border:1px solid #ddd;padding:5px;"
+              />
+            </td>
+          </tr>
+          <tr>
+            <!-- INFO BOX -->
+            <td>
+              <div style="
+                background:#bfe797;
+                padding:8px;
+                border-radius:8px;
+                width:400px;
+                font-size:14px;
+              ">
+                <p style="line-height:50%;"><strong>Захиалгын дугаар(Batch ID):</strong> ${apiResponse.obj.esimList[0].orderNo}</p>
+                <p style="line-height:50%;"><strong>eSIM дугаар:</strong> ${apiResponse.obj.esimList[0].esimTranNo}</p>
+                <p style="line-height:50%;"><strong>Багцын нэр:</strong> ${apiResponse.obj.esimList[0].packageList[0].packageName}</p>
+                <p style="line-height:50%;"><strong>Хүчинтэй хугацаа:</strong> ${apiResponse.obj.esimList[0].expiredTime}</p>
+
+                <p style=" style="line-height:50%;display:inline"">
+                  <strong>SM-DP+ Хаяг:</strong>
+                  <a href=${smdp} target="_blank">
+                    ${smdp}
+                  </a>
+                </p>
+
+                <p style="line-height:50%"><strong>Идэвхжүүлэх Код:</strong> ${activationCode}</p>
+
+                <p style="line-height:50%">
+                  <strong>APN:</strong>
+                  <a href=${apiResponse.obj.esimList[0].apn} target="_blank">${apiResponse.obj.esimList[0].apn}</a>
+                </p>
+              </div>
+            </td>
+          </tr>
+        </table>
+
+        <p style="margin-top:20px;">
+          Мөн дараах холбоосыг ашиглан QR кодоо суулгах болон дата хэрэглээгээ хянах боломжтой:  
+          <a href="${apiResponse.obj.esimList[0].shortUrl}" target="_blank">${apiResponse.obj.esimList[0].shortUrl}</a>
+        </p>
+
+        <hr style="margin-top:20px;" />
+        <p>Хүндэтгэсэн,</p>
+        <strong><p style="color: #34a04b;">GOY eSIM</p></strong>
+      </div>
+      `;
+      return htmlOrder;
   }
 }
