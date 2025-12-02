@@ -61,7 +61,7 @@ export class TransactionsService {
     private readonly inquiryPackagesService: InquiryPackagesService,
     private readonly mailService: MailService,
     @InjectRepository(User)
-    private readonly userRepository: Repository<User>
+    private readonly userRepository: Repository<User>,
   ) {}
 
   /**
@@ -2261,31 +2261,44 @@ export class TransactionsService {
       this.logger.log(
         `Successfully queried eSIM purchases. Found ${apiResponse.obj?.esimList?.length || 0} items`,
       );
-      
-      const esimPurchase = await this.esimPurchaseRepository.findOne({where: { orderNo: queryDto.orderNo}})
-      let sendEmailAccount ='';
-      if(esimPurchase){
-        if(esimPurchase.customerId){
-          const sendEmail = await this.customerRepository.findOne({ where: { id: esimPurchase.customerId }});
-          if (!sendEmail) 
-            throw new Error(`Customer ${esimPurchase.customerId} not found in transaction`);
-          else
-            sendEmailAccount = sendEmail.email;
-        }else{
-          if(esimPurchase.userId){
-            const sendEmail = await this.userRepository.findOne({ where: { id: esimPurchase.userId}});
-            if (!sendEmail) 
-              throw new Error(`User ${esimPurchase.userId} not found in transaction`);
-            else
-              sendEmailAccount = sendEmail?.email;
-          }else{
-            throw new Error(`User ${esimPurchase.userId} not found in transaction`);
+
+      const esimPurchase = await this.esimPurchaseRepository.findOne({
+        where: { orderNo: queryDto.orderNo },
+      });
+      let sendEmailAccount = '';
+      if (esimPurchase) {
+        if (esimPurchase.customerId) {
+          const sendEmail = await this.customerRepository.findOne({
+            where: { id: esimPurchase.customerId },
+          });
+          if (!sendEmail)
+            throw new Error(
+              `Customer ${esimPurchase.customerId} not found in transaction`,
+            );
+          else sendEmailAccount = sendEmail.email;
+        } else {
+          if (esimPurchase.userId) {
+            const sendEmail = await this.userRepository.findOne({
+              where: { id: esimPurchase.userId },
+            });
+            if (!sendEmail)
+              throw new Error(
+                `User ${esimPurchase.userId} not found in transaction`,
+              );
+            else sendEmailAccount = sendEmail?.email;
+          } else {
+            throw new Error(
+              `User ${esimPurchase.userId} not found in transaction`,
+            );
           }
-        
         }
       }
       const orderHtml = this.OrderMailBuilder(apiResponse);
-      await this.mailService.sendMail(sendEmailAccount,'Goy eSIM purchase', orderHtml);
+      await this.mailService.sendMail(
+        sendEmailAccount,
+        'Goy eSIM purchase',
+        orderHtml,
+      );
 
       // Return the API response as-is (it already matches the expected format)
       return {
@@ -2334,13 +2347,13 @@ export class TransactionsService {
     }
   }
 
-  OrderMailBuilder(apiResponse: any): string{
+  OrderMailBuilder(apiResponse: any): string {
     const ac = apiResponse.obj.esimList[0].ac;
-      const parts = ac.split("$");
-      const smdp = parts[1];
-      const activationCode = parts[2];
+    const parts = ac.split('$');
+    const smdp = parts[1];
+    const activationCode = parts[2];
 
-      const htmlOrder = `
+    const htmlOrder = `
       <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
 
         <p>Эрхэм харилцагч танд,</p>
@@ -2406,6 +2419,6 @@ export class TransactionsService {
         <strong><p style="color: #34a04b;">GOY eSIM</p></strong>
       </div>
       `;
-      return htmlOrder;
+    return htmlOrder;
   }
 }
