@@ -16,6 +16,7 @@ import { SystemConfig } from '../entities/system-config.entity';
 import { InquiryModule } from '../inquiry/inquiry.module';
 import { MailService } from './services/mail.service';
 import { User } from 'src/entities/user.entity';
+import { DataPackageEntity } from 'src/entities/data-packages.entity';
 
 @Module({
   imports: [
@@ -26,7 +27,8 @@ import { User } from 'src/entities/user.entity';
       Customer,
       EsimInvoice,
       SystemConfig, // SystemConfig entity for QPay token caching
-      User
+      User,
+      DataPackageEntity
     ]),
     WalletModule, // Import WalletModule to use WalletService
     forwardRef(() => AuthModule), // Import AuthModule to access TokenBlacklistService for JwtAuthGuard
