@@ -486,6 +486,61 @@ export class UsersController {
     if(req.user.role === 'ADMIN')
       return (await this.usersService.getOnboard(timeRange));
     else
-      throw ForbiddenException;
+      throw new ForbiddenException;
+  }
+
+  @Get('calculateSalaryPre')
+  @ApiOperation({
+    summary: 'Get dashboard infos',
+    description: 'Get dashboard infos, onboarding, monitoring',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User request successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async calculateSalaryPre(
+    @Request() req: AuthRequest,
+  ): Promise<any> {
+    if(req.user.role === 'ADMIN')
+      return (await this.usersService.calculateSalaryPre());
+    else
+      throw new ForbiddenException;
+  }
+
+  @Post('calculateSalaryFinal/:profit/:loss')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Get dashboard infos',
+    description: 'Get dashboard infos, onboarding, monitoring',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User request successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async calculateSalaryFinal(
+    @Request() req: AuthRequest,
+    @Param('profit') profit: number,
+    @Param('loss')loss: number,
+  ): Promise<any> {
+    if(req.user.role === 'ADMIN')
+      return (await this.usersService.calculateSalaryFinal(profit, loss));
+    else
+      throw new ForbiddenException;
   }
 }

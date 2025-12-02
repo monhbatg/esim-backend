@@ -9,9 +9,11 @@ import { ReferencesHistory } from 'src/entities/reference-history.entity';
 import { Transaction } from 'src/entities/transaction.entity';
 import { ESimPurchase } from 'src/entities/esim-purchase.entity';
 import { EsimInvoice } from 'src/entities/esim-invoice.entity';
+import { Customer } from 'src/entities/customer.entity';
+import { Wallet } from 'src/entities/wallet.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User,SettingsReferences,ReferencesHistory,ESimPurchase, EsimInvoice,SettingsReferences]), forwardRef(() => AuthModule)],
+  imports: [TypeOrmModule.forFeature([User,SettingsReferences,ReferencesHistory,ESimPurchase, EsimInvoice,SettingsReferences,Customer,Wallet]), forwardRef(() => AuthModule)],
   controllers: [UsersController],
   providers: [UsersService],
   exports: [UsersService],

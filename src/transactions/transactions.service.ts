@@ -943,7 +943,7 @@ export class TransactionsService {
     const invoiceRequest: any = {
       sender_invoice_no: senderInvoiceNo,
       invoice_receiver_code: dto.phoneNumber,
-      invoice_description: dto.description || 'Customer eSIM Purchase',
+      invoice_description: dto.phoneNumber || 'Customer eSIM Purchase',
       amount: dto.amount,
       callback_url: `${process.env.API_URL || 'http://localhost:3000'}/customer/transactions/callback/${senderInvoiceNo}`,
       invoice_receiver_data: {
@@ -3189,8 +3189,9 @@ export class TransactionsService {
                 width:400px;
                 font-size:14px;
               ">
-                <p style="line-height:50%;"><strong>Захиалгын дугаар(Batch ID):</strong> ${apiResponse.obj.esimList[0].orderNo}</p>
-                <p style="line-height:50%;"><strong>eSIM дугаар:</strong> ${apiResponse.obj.esimList[0].esimTranNo}</p>
+                <p style="line-height:50%;"><strong>Захиалгын дугаар(Order ID):</strong> ${apiResponse.obj.esimList[0].orderNo}</p>
+                <p style="line-height:50%;"><strong>eSIM дугаар(esimTranNo):</strong> ${apiResponse.obj.esimList[0].esimTranNo}</p>
+                <p style="line-height:50%;"><strong>ICCID дугаар(iccId):</strong> ${apiResponse.obj.esimList[0].iccId}</p>
                 <p style="line-height:50%;"><strong>Багцын нэр:</strong> ${apiResponse.obj.esimList[0].packageList[0].packageName}</p>
                 <p style="line-height:50%;"><strong>Хүчинтэй хугацаа:</strong> ${apiResponse.obj.esimList[0].expiredTime}</p>
 

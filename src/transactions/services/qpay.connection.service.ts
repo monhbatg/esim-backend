@@ -157,9 +157,9 @@ export class QpayConnectionService {
       ...invoiceData,
       invoice_code: this.qpayInvoiceCode!,
       sender_invoice_no:
-        invoiceData.sender_invoice_no || `GOY_SIM-${Date.now()}`,
+        invoiceData.sender_invoice_no || `GOY_SIM-${Date.now()}`, 
       invoice_receiver_code: invoiceData.invoice_receiver_code || 'GOY_SIM',
-      sender_branch_code: invoiceData.sender_branch_code || 'BRANCH001',
+      sender_branch_code: invoiceData.invoice_description,
       invoice_description:
         invoiceData.invoice_description || 'Default Invoice Description',
       enable_expiry: invoiceData.enable_expiry ?? false,
@@ -168,7 +168,7 @@ export class QpayConnectionService {
       allow_exceed: invoiceData.allow_exceed ?? false,
       maximum_amount: invoiceData.maximum_amount ?? null,
       callback_url: invoiceData.callback_url || '',
-      sender_staff_code: invoiceData.sender_staff_code || 'online',
+      sender_staff_code: '',
       sender_terminal_code: invoiceData.sender_terminal_code || undefined,
       sender_terminal_data: invoiceData.sender_terminal_data || { name: null },
       allow_subscribe: invoiceData.allow_subscribe ?? false,
