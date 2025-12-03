@@ -2430,12 +2430,12 @@ export class TransactionsService {
                 background:#bfe797;
                 padding:8px;
                 border-radius:8px;
-                width:400px;
+                width:450px;
                 font-size:14px;
               ">
-                <p style="line-height:50%;"><strong>Захиалгын дугаар(Batch ID):</strong> ${apiResponse.obj.esimList[0].orderNo}</p>
-                <p style="line-height:50%;"><strong>eSIM дугаар:</strong> ${apiResponse.obj.esimList[0].esimTranNo}</p>
-                <p style="line-height:50%;"><strong>ICCID дугаар(iccId):</strong> ${apiResponse.obj.esimList[0].iccid}</p>
+                <p style="line-height:50%;"><strong>Захиалгын дугаар(orderNo):</strong> ${apiResponse.obj.esimList[0].orderNo}</p>
+                <p style="line-height:50%;"><strong>eSIM дугаар(esimTranNo):</strong> ${apiResponse.obj.esimList[0].esimTranNo}</p>
+                <p style="line-height:50%;"><strong>ICCID дугаар(iccid):</strong> ${apiResponse.obj.esimList[0].iccid}</p>
                 <p style="line-height:50%;"><strong>Багцын нэр:</strong> ${apiResponse.obj.esimList[0].packageList[0].packageName}</p>
                 <p style="line-height:50%;"><strong>Хүчинтэй хугацаа:</strong> ${apiResponse.obj.esimList[0].expiredTime}</p>
 
@@ -3217,10 +3217,6 @@ export class TransactionsService {
   }
 
   TopupMailBuilder(esimList: EsimItem[]): string{
-    const ac = esimList[0].ac;
-      const parts = ac.split("$");
-      const smdp = parts[1];
-      const activationCode = parts[2];
     const htmlTopup = `
       <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
 
@@ -3231,19 +3227,9 @@ export class TransactionsService {
           Та төхөөрөмж дээрээ идэвхжүүлэхийн тулд QR кодыг уншуулж хэрэглэнэ үү.
         </p>
 
-        <p><strong>Уншуулах QR код:</strong></p>
+        <p><strong>Таны цэнэглэсэн багцын мэдээлэл:</strong></p>
 
         <table cellpadding="10" cellspacing="0" border="0" border-spacing="0">
-          <tr>
-            <!-- QR CODE -->
-            <td style="vertical-align: top;">
-              <img 
-                src=${esimList[0].qrCodeUrl}  
-                alt="QR Code" 
-                style="width:180px;height:180px;border:1px solid #ddd;padding:5px;"
-              />
-            </td>
-          </tr>
           <tr>
             <!-- INFO BOX -->
             <td>
@@ -3251,24 +3237,12 @@ export class TransactionsService {
                 background:#bfe797;
                 padding:8px;
                 border-radius:8px;
-                width:400px;
+                width:450px;
                 font-size:14px;
               ">
-                <p style="line-height:50%;"><strong>Захиалгын дугаар(Batch ID):</strong> ${esimList[0].orderNo}</p>
-                <p style="line-height:50%;"><strong>eSIM дугаар:</strong> ${esimList[0].esimTranNo}</p>
-                <p style="line-height:50%;"><strong>ICCID дугаар(iccId):</strong> ${esimList[0].iccid}</p>
-                <p style="line-height:50%;"><strong>Багцын нэр:</strong> ${esimList[0].packageList[0].packageName}</p>
-                <p style="line-height:50%;"><strong>Хүчинтэй хугацаа:</strong> ${esimList[0].expiredTime}</p>
-
-                <p style=" style="line-height:50%;display:inline"">
-                  <strong>SM-DP+ Хаяг:</strong>
-                  <a href=${smdp} target="_blank">
-                    ${smdp}
-                  </a>
-                </p>
-
-                <p style="line-height:50%"><strong>Идэвхжүүлэх Код:</strong> ${activationCode}</p>
-
+                <p style="line-height:50%;"><strong>Захиалгын дугаар(orderNo):</strong> ${esimList[0].orderNo}</p>
+                <p style="line-height:50%;"><strong>eSIM дугаар(esimTranNo):</strong> ${esimList[0].esimTranNo}</p>
+                <p style="line-height:50%;"><strong>ICCID дугаар(iccid):</strong> ${esimList[0].iccid}</p>
                 <p style="line-height:50%">
                   <strong>APN:</strong>
                   <a href=${esimList[0].apn} target="_blank">${esimList[0].apn}</a>
@@ -3279,7 +3253,7 @@ export class TransactionsService {
         </table>
 
         <p style="margin-top:20px;">
-          Мөн дараах QR кодоор суулгаж болно:  
+          Мөн дараах QR кодоор дата хэрэглээгээ хянах боломжтой:  
           <a href="${esimList[0].shortUrl}" target="_blank">${esimList[0].shortUrl}</a>
         </p>
 
