@@ -73,4 +73,28 @@ export class OpenEsimController {
   ): Promise<EsimQueryResponseDto> {
     return await this.transactionsService.queryEsimPurchases(queryDto);
   }
+
+  @Post('queryTopup')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Query eSIM purchases',
+    description:
+      'Query eSIM purchases by orderNo, esimTranNo, iccid, or date range. Public endpoint matching eSIM Access API format. Accessible at /api/v1/open/esim/query',
+  })
+  @ApiBody({ type: QueryEsimDto })
+  @ApiResponse({
+    status: 200,
+    description: 'eSIM query results retrieved successfully',
+    type: EsimQueryResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid input data',
+  })
+  async queryTopupEsim(
+    @Body(ValidationPipe) queryDto: QueryEsimDto,
+  ): Promise<EsimQueryResponseDto> {
+    return await this.transactionsService.queryExtend(queryDto);
+  }
 }

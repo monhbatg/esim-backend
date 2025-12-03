@@ -26,6 +26,9 @@ export class EsimInvoice {
   @Column({ default: 'PENDING' })
   status: string;
 
+  @Column({ nullable: true})
+  iccId: string;
+
   @Column({ nullable: true })
   packageCode: string;
 

@@ -900,42 +900,32 @@ export class TransactionsController {
     };
   }
 
-  @Post('order/esim-test')
+  
+  @Post('checkTopup/:invoiceId')
+  @Public()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Test eSIM order',
-    description: 'Test eSIM order without payment',
-  })
-  async testOrderEsim(): Promise<unknown> {
-    return await this.qpayConnectionService.orderEsim();
-  }
-
-  @Post('esim/topup')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'top up esim',
-    description: 'eSIM цэнэглэх',
+    summary: 'Check topup actions QPay invoice status',
+    description:
+      'Нэхэмжлэл төлөгдсөн эсэхийг шалгах. If paid, automatically topup the eSIM card.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Invoice status retrieved successfully',
+    description:
+      'Invoice status retrieved successfully. If paid, eSIM topup is automatically.',
   })
   @ApiResponse({
     status: 400,
     description: 'Invalid invoice ID',
   })
   @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing token',
-  })
-  @ApiResponse({
     status: 404,
     description: 'Invoice not found',
   })
-  async topupEsim(
-    @Request() req: AuthRequest,
-    @Body() body: esimTopupResquestDto.TopupEsim,
-  ): Promise<unknown> {
-    return await this.qpayConnectionService.topupEsim(body);
+  async checkTopupInvoiceStatus(
+    @Param('invoiceId') qpayInvoiceId: string, // QPay invoice ID (external payment system ID)
+  ): Promise<Record<string, unknown>> {
+    return await this.transactionsService.topupEsim(qpayInvoiceId);
   }
+
 }
