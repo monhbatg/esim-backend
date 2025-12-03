@@ -946,7 +946,7 @@ export class TransactionsService {
     const invoiceRequest: any = {
       sender_invoice_no: senderInvoiceNo,
       invoice_receiver_code: dto.phoneNumber,
-      invoice_description: dto.description || 'Customer eSIM Purchase',
+      invoice_description: dto.packageCode+', '+dto.phoneNumber+', Захиалга' || 'Customer eSIM Purchase',
       amount: dto.amount,
       callback_url: `${process.env.API_URL || 'http://localhost:3000'}/customer/transactions/callback/${senderInvoiceNo}`,
       invoice_receiver_data: {
@@ -2435,6 +2435,7 @@ export class TransactionsService {
               ">
                 <p style="line-height:50%;"><strong>Захиалгын дугаар(Batch ID):</strong> ${apiResponse.obj.esimList[0].orderNo}</p>
                 <p style="line-height:50%;"><strong>eSIM дугаар:</strong> ${apiResponse.obj.esimList[0].esimTranNo}</p>
+                <p style="line-height:50%;"><strong>ICCID дугаар(iccId):</strong> ${apiResponse.obj.esimList[0].iccid}</p>
                 <p style="line-height:50%;"><strong>Багцын нэр:</strong> ${apiResponse.obj.esimList[0].packageList[0].packageName}</p>
                 <p style="line-height:50%;"><strong>Хүчинтэй хугацаа:</strong> ${apiResponse.obj.esimList[0].expiredTime}</p>
 
@@ -2544,7 +2545,7 @@ export class TransactionsService {
       }
 
       this.logger.log(
-        `Successfully queried eSIM purchases. Found ${apiResponse.obj?.esimList?.length || 0} items`,
+        `Successfully queried eSIM topup. Found ${apiResponse.obj?.esimList?.length || 0} items`,
       );
 
       //find Related Packages and add to response
@@ -2556,14 +2557,15 @@ export class TransactionsService {
       const orderLog = await this.esimPurchaseRepository.findOne({ where: {orderNo: apiResponse.obj.esimList[0].orderNo}});
       let phoneNumber= '';
       let email='';
-      if(orderLog?.customerId!==null){
-        const customer = await this.customerRepository.findOne({ where: {id: orderLog!.customerId}});
-        if(customer){
-          phoneNumber = customer?.phoneNumber;
-          email = customer?.email;
+      if(orderLog!==null){
+        if(orderLog?.customerId!==null){
+          const customer = await this.customerRepository.findOne({ where: {id: orderLog!.customerId}});
+          if(customer){
+            phoneNumber = customer?.phoneNumber;
+            email = customer?.email;
+          }
         }
       }
-
       // Return the API response as-is (it already matches the expected format)
       return {
         success: apiResponse.success !== undefined ? apiResponse.success : true,
@@ -2589,7 +2591,7 @@ export class TransactionsService {
       );
 
       // Extract error message from response if available
-      let errorMessage = 'Failed to query eSIM purchases';
+      let errorMessage = 'Failed to query eSIM topup 2594';
       if (axiosError.response?.data) {
         const errorData = axiosError.response.data as any;
         errorMessage =
@@ -2647,7 +2649,7 @@ export class TransactionsService {
     const invoiceRequest: any = {
       sender_invoice_no: senderInvoiceNo,
       invoice_receiver_code: dto.phoneNumber,
-      invoice_description: dto.description || 'Customer eSIM Topup',
+      invoice_description: dto.packageCode+', '+dto.phoneNumber+', Цэнэглэлт' || 'Customer eSIM Topup',
       amount: dto.amount,
       callback_url: `${process.env.API_URL || 'http://localhost:3000'}/customer/transactions/callback/${senderInvoiceNo}`,
       invoice_receiver_data: {
@@ -3057,7 +3059,7 @@ export class TransactionsService {
         esimTranNo:"",
         iccid: esimInvoice.iccId,
       }
-      const currentEsim = await this.queryEsimPurchases(queryData);
+      const currentEsim = await this.queryExtend(queryData);
       // Extract order number from response
       const orderNo = currentEsim.obj.esimList[0].orderNo;
       if (!orderNo) {
@@ -3208,7 +3210,7 @@ export class TransactionsService {
       };
     } catch (error) {
       this.logger.error(
-        `eSIM order failed for invoice (QPay ID: ${qpayInvoiceId}, Internal ID: ${esimInvoice.id}): ${error instanceof Error ? error.message : 'Unknown'}`,
+        `eSIM topup failed for invoice (QPay ID: ${qpayInvoiceId}, Internal ID: ${esimInvoice.id}): ${error instanceof Error ? error.message : 'Unknown'}`,
       );
       throw error;
     }
@@ -3254,6 +3256,7 @@ export class TransactionsService {
               ">
                 <p style="line-height:50%;"><strong>Захиалгын дугаар(Batch ID):</strong> ${esimList[0].orderNo}</p>
                 <p style="line-height:50%;"><strong>eSIM дугаар:</strong> ${esimList[0].esimTranNo}</p>
+                <p style="line-height:50%;"><strong>ICCID дугаар(iccId):</strong> ${esimList[0].iccid}</p>
                 <p style="line-height:50%;"><strong>Багцын нэр:</strong> ${esimList[0].packageList[0].packageName}</p>
                 <p style="line-height:50%;"><strong>Хүчинтэй хугацаа:</strong> ${esimList[0].expiredTime}</p>
 

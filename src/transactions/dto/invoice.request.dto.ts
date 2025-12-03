@@ -30,6 +30,7 @@ export interface InvoiceRequest {
   invoice_receiver_code: string;
   invoice_receiver_data: InvoiceReceiverData;
   invoice_description: string;
+  tax_type: string;
   enable_expiry?: boolean;
   allow_partial?: boolean;
   minimum_amount?: number | null;
