@@ -41,14 +41,19 @@ import {
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { UserRole } from './dto/user-role.enum';
 import { User } from '../entities/user.entity';
-import type { ReferenceReq } from './dto/reference-request.dto';
+import type { ReferenceReq, ReferenceReqList, UpdateRefs } from './dto/reference-request.dto';
+import type { SalaryReq } from './dto/salary-req.dto';
+import { AdminService } from './admin.service';
 
 @ApiTags('users')
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly adminService: AdminService
+  ) {}
 
   @Get('profile')
   @ApiOperation({
@@ -431,9 +436,12 @@ export class UsersController {
     @Request() req: AuthRequest,
     @Body() body: ReferenceReq,
   ): Promise<any> {
-    return (await this.usersService.setReferences(
-      req.user.id, body
-    ));
+    if(req.user.role === 'ADMIN')
+      return (await this.adminService.setReferences(
+        req.user.id, body
+      ));
+    else
+      throw new ForbiddenException;
   }
 
   @Get('getReference')
@@ -457,7 +465,36 @@ export class UsersController {
   async getReferences(
     @Request() req: AuthRequest,
   ): Promise<any> {
-    return (await this.usersService.getReferences(
+    if(req.user.role === 'ADMIN')
+      return (await this.adminService.getReferences());
+    else
+      throw new ForbiddenException;
+  }
+
+  @Post('update/reference')
+  @ApiOperation({
+    summary: 'Set configuration parametrs',
+    description: 'Set configuration parametrs',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User preferences retrieved successfully',
+    type: UserPreferencesDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async updateReferences(
+    @Request() req: AuthRequest,
+    @Body() body: UpdateRefs,
+  ): Promise<any> {
+    return (await this.adminService.updateReferences(
+      req.user.id, body
     ));
   }
 
@@ -484,7 +521,7 @@ export class UsersController {
     @Param('timeRange') timeRange: string,
   ): Promise<any> {
     if(req.user.role === 'ADMIN')
-      return (await this.usersService.getOnboard(timeRange));
+      return (await this.adminService.getOnboard(timeRange));
     else
       throw new ForbiddenException;
   }
@@ -510,12 +547,12 @@ export class UsersController {
     @Request() req: AuthRequest,
   ): Promise<any> {
     if(req.user.role === 'ADMIN')
-      return (await this.usersService.calculateSalaryPre());
+      return (await this.adminService.calculateSalaryPre());
     else
       throw new ForbiddenException;
   }
 
-  @Post('calculateSalaryFinal/:profit/:loss')
+  @Post('calculateSalaryFinal')
   @HttpCode(200)
   @ApiOperation({
     summary: 'Get dashboard infos',
@@ -535,11 +572,10 @@ export class UsersController {
   })
   async calculateSalaryFinal(
     @Request() req: AuthRequest,
-    @Param('profit') profit: number,
-    @Param('loss')loss: number,
+    @Body() body: SalaryReq
   ): Promise<any> {
     if(req.user.role === 'ADMIN')
-      return (await this.usersService.calculateSalaryFinal(profit, loss));
+      return (await this.adminService.calculateSalaryFinal(body));
     else
       throw new ForbiddenException;
   }

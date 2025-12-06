@@ -8,3 +8,12 @@ export interface ReferenceReq extends Request {
     value: string,
     description: string
 }
+
+export interface ReferenceReqList extends Request{
+    updatedRef: UpdateRefs[]
+}
+
+export interface UpdateRefs extends Request{
+    id: string,
+    value: string;
+}
