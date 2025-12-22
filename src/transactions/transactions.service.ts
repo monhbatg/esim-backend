@@ -2462,9 +2462,42 @@ export class TransactionsService {
           <a href="${apiResponse.obj.esimList[0].shortUrl}" target="_blank">${apiResponse.obj.esimList[0].shortUrl}</a>
         </p>
 
-        <hr style="margin-top:20px;" />
-        <p>Хүндэтгэсэн,</p>
-        <strong><p style="color: #34a04b;">GOY eSIM</p></strong>
+        <hr style="margin-top:20px; border:none; border-top:1px solid #e5e5e5;" />
+
+        <div style="
+          margin-top:16px;
+          font-size:13px;
+          color:#555;
+          line-height:1.6;
+        ">
+          <p style="margin:3px 0;">
+            <span style="color:#34a04b;">🍀</span>
+            <strong>Утас:</strong>
+            <a href="tel:+97670001234" style="color:#34a04b; text-decoration:none;">
+              +976 6001-6363
+            </a>
+          </p>
+
+          <p style="margin:3px 0;">
+            <span style="color:#34a04b;">🍀</span>
+            <strong>Фэйсбүүк хаяг:</strong>
+            <a href="https://www.facebook.com/GOYeSIM/" target="_blank" style="color:#34a04b; text-decoration:none;">
+              facebook.com/GOYeSIM
+            </a>
+          </p>
+
+          <p style="margin:3px 0;">
+            <span style="color:#34a04b;">🍀</span>
+            <strong>Вэб сайт:</strong>
+            <a href="https://www.goysim.mn" target="_blank" style="color:#34a04b; text-decoration:none;">
+              www.goysim.mn
+            </a>
+          </p>
+        </div>
+
+        <p style="margin-top:14px;">Хүндэтгэсэн,</p>
+        <strong><p style="color:#34a04b; margin:0;">GOY eSIM</p></strong>
+
       </div>
       `;
     return htmlOrder;
@@ -3257,7 +3290,38 @@ export class TransactionsService {
           <a href="${esimList[0].shortUrl}" target="_blank">${esimList[0].shortUrl}</a>
         </p>
 
-        <hr style="margin-top:20px;" />
+        <hr style="margin-top:20px; border:none; border-top:1px solid #e5e5e5;" />
+
+        <div style="
+          margin-top:16px;
+          font-size:13px;
+          color:#555;
+          line-height:1.6;
+        ">
+          <p style="margin:3px 0;">
+            <span style="color:#34a04b;">🍀</span>
+            <strong>Утас:</strong>
+            <a href="tel:+97670001234" style="color:#34a04b; text-decoration:none;">
+              +976 6001-6363
+            </a>
+          </p>
+
+          <p style="margin:3px 0;">
+            <span style="color:#34a04b;">🍀</span>
+            <strong>Фэйсбүүк хаяг:</strong>
+            <a href="https://www.facebook.com/GOYeSIM/" target="_blank" style="color:#34a04b; text-decoration:none;">
+              facebook.com/GOYeSIM
+            </a>
+          </p>
+
+          <p style="margin:3px 0;">
+            <span style="color:#34a04b;">🍀</span>
+            <strong>Вэб сайт:</strong>
+            <a href="https://www.goysim.mn" target="_blank" style="color:#34a04b; text-decoration:none;">
+              www.goysim.mn
+            </a>
+          </p>
+        </div>
         <p>Хүндэтгэсэн,</p>
         <strong><p style="color: #34a04b;">GOY eSIM</p></strong>
       </div>
