@@ -149,16 +149,17 @@ export class QpayConnectionService {
       sender_invoice_no:
         invoiceData.sender_invoice_no || `GOY_SIM-${Date.now()}`,
       invoice_receiver_code: invoiceData.invoice_receiver_code || 'GOY_SIM',
-      sender_branch_code: invoiceData.sender_branch_code || 'BRANCH001',
+      sender_branch_code: invoiceData.invoice_description,
       invoice_description:
         invoiceData.invoice_description || 'Default Invoice Description',
+      tax_type: '3',
       enable_expiry: invoiceData.enable_expiry ?? false,
       allow_partial: invoiceData.allow_partial ?? false,
       minimum_amount: invoiceData.minimum_amount ?? null,
       allow_exceed: invoiceData.allow_exceed ?? false,
       maximum_amount: invoiceData.maximum_amount ?? null,
       callback_url: invoiceData.callback_url || '',
-      sender_staff_code: invoiceData.sender_staff_code || 'online',
+      sender_staff_code: '',
       sender_terminal_code: invoiceData.sender_terminal_code || undefined,
       sender_terminal_data: invoiceData.sender_terminal_data || { name: null },
       allow_subscribe: invoiceData.allow_subscribe ?? false,
@@ -208,56 +209,4 @@ export class QpayConnectionService {
     }
   }
 
-  async orderEsim() {
-    const url = `${this.apiBaseUrl}/open/esim/order`;
-    this.logger.log(`Fetching data packages from: ${url}`);
-    const response: any = await firstValueFrom(
-      this.httpService.post<ApiResponse>(
-        url,
-        {
-          transactionId: `GOY_SIM-2025111511`,
-          amount: 17000,
-          packageInfoList: [
-            {
-              packageCode: 'JC053',
-              count: 1,
-              price: 17000,
-            },
-          ],
-        },
-        {
-          headers: {
-            'RT-AccessCode': this.accessCode,
-            'Content-Type': 'application/json',
-          },
-        },
-      ),
-    );
-    const data: ApiResponse = response.data;
-    return data;
-  }
-
-  async topupEsim(body: TopupEsim): Promise<ApiResponse> {
-    const url = `${this.apiBaseUrl}/open/esim/topup`;
-    this.logger.log(`Fetching data packages from: ${url}`);
-    const response: any = await firstValueFrom(
-      this.httpService.post<ApiResponse>(
-        url,
-        {
-          esimTranNo: body.esimTranNo,
-          iccid: '',
-          packageCode: body.packageCode,
-          transactionId: body.transactionId,
-        },
-        {
-          headers: {
-            'RT-AccessCode': this.accessCode,
-            'Content-Type': 'application/json',
-          },
-        },
-      ),
-    );
-    const data: ApiResponse = response.data;
-    return data;
-  }
 }

@@ -59,4 +59,18 @@ export class CustomerTransactionsController {
     );
     return data;
   }
+
+  @Post('purchaseTopup')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Customer purchase eSIM',
+    description: 'Create QPay invoice for customer',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Invoice created successfully',
+  })
+  async topup(@Body(ValidationPipe) dto: CustomerPurchaseDto ): Promise<any> {
+    return await this.transactionsService.processCustomerTopup(dto);
+  }
 }
