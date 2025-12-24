@@ -538,12 +538,29 @@ function getDateRange(timeRange: string): { start: any; end: any; } {
           const lastDayOfWeek = new Date(now);
           //firstDayOfWeek.setDate(now.getDate() - now.getDay()); // Start of this week (Sunday or Monday depending on locale)
           const firstDayOfWeek = new Date(lastDayOfWeek);
-          firstDayOfWeek.setDate(lastDayOfWeek.getDate() - 6); // End of this week (Saturday)
-        
+          firstDayOfWeek.setDate(lastDayOfWeek.getDate() - 6); // End of this week (Saturday)        
           return {
             start: new Date(firstDayOfWeek.setHours(0, 0, 0, 0)),  // Start of the week
             end: new Date(lastDayOfWeek.setHours(23, 59, 59, 999)),  // End of the week
           };
+        case 'last_two_week':
+          const lastTwoWeeksStart = new Date(now);
+          lastTwoWeeksStart.setDate(lastTwoWeeksStart.getDate() - 14); // Go back 14 days
+          const lastTwoWeeksEnd = new Date(now);  // Today's date
+          return {
+            start: new Date(lastTwoWeeksStart.setHours(0, 0, 0, 0)),  // Start of last two weeks
+            end: new Date(lastTwoWeeksEnd.setHours(23, 59, 59, 999)),  // End of today
+          };
+        
+        case 'last_month':
+          const lastMonthStart = new Date(now);
+          const lastMonthEnd = new Date(lastMonthStart);
+          lastMonthStart.setMonth(now.getMonth() - 1); // Go to the previous month
+          return {
+            start: new Date(lastMonthStart.setHours(0, 0, 0, 0)),  // Start of the previous month
+            end: new Date(lastMonthEnd.setHours(23, 59, 59, 999)),  // End of the previous month
+          };
+        
         default:
           return {
             start: startOfDay,
