@@ -35,9 +35,6 @@ export class EsimInvoice {
   @Column({ nullable: true })
   customerId: string;
 
-  @Column({ default: false })
-  isSentEmail: boolean;
-
   @ManyToOne(() => Customer)
   @JoinColumn({ name: 'customerId' })
   customer: Customer;

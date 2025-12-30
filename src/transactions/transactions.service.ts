@@ -969,7 +969,6 @@ export class TransactionsService {
       customer: customer,
       invoiceData: qpayResponse,
       packageCode: dto.packageCode,
-      isSentEmail: false,
     });
 
     await this.esimInvoiceRepository.save(esimInvoice);
@@ -1257,18 +1256,16 @@ export class TransactionsService {
   }
 
   /**
-   * Get all pending invoices for cron job processing
-   * @returns Array of pending EsimInvoices
+   * Get EsimInvoice by QPay invoice ID
+   * @param qpayInvoiceId - The QPay invoice ID
+   * @returns The EsimInvoice or null if not found
    */
-  async getPendingInvoices(): Promise<EsimInvoice[]> {
-    return await this.esimInvoiceRepository.find({
-      where: {
-        status: 'PENDING',
-      },
+  async getEsimInvoiceByQpayId(
+    qpayInvoiceId: string,
+  ): Promise<EsimInvoice | null> {
+    return await this.esimInvoiceRepository.findOne({
+      where: { qpayInvoiceId },
       relations: ['customer'],
-      order: {
-        createdAt: 'ASC', // Process oldest first
-      },
     });
   }
 
@@ -2317,49 +2314,38 @@ export class TransactionsService {
       });
       let sendEmailAccount = '';
       if (esimPurchase) {
-        const esimInvoice = await this.esimInvoiceRepository.findOne({
-          where: { id: esimPurchase.invoiceId! },
-        });
-          if(esimInvoice){
-            if (esimInvoice.isSentEmail === false) {
-              if (esimPurchase.customerId) {
-                const sendEmail = await this.customerRepository.findOne({
-                  where: { id: esimPurchase.customerId },
-                });
-                if (!sendEmail)
-                  throw new Error(
-                    `Customer ${esimPurchase.customerId} not found in transaction`,
-                  );
-                else sendEmailAccount = sendEmail.email;
-              } else {
-                if (esimPurchase.userId) {
-                  const sendEmail = await this.userRepository.findOne({
-                    where: { id: esimPurchase.userId },
-                  });
-                  if (!sendEmail)
-                    throw new Error(
-                      `User ${esimPurchase.userId} not found in transaction`,
-                    );
-                  else sendEmailAccount = sendEmail?.email;
-                } else {
-                  throw new Error(
-                    `User ${esimPurchase.userId} not found in transaction`,
-                  );
-                }
-              }
-              const orderHtml = this.OrderMailBuilder(apiResponse);
-              await this.mailService.sendMail(
-                sendEmailAccount,
-                'Goy eSIM purchase',
-                orderHtml,
+        if (esimPurchase.customerId) {
+          const sendEmail = await this.customerRepository.findOne({
+            where: { id: esimPurchase.customerId },
+          });
+          if (!sendEmail)
+            throw new Error(
+              `Customer ${esimPurchase.customerId} not found in transaction`,
+            );
+          else sendEmailAccount = sendEmail.email;
+        } else {
+          if (esimPurchase.userId) {
+            const sendEmail = await this.userRepository.findOne({
+              where: { id: esimPurchase.userId },
+            });
+            if (!sendEmail)
+              throw new Error(
+                `User ${esimPurchase.userId} not found in transaction`,
               );
-              await this.esimInvoiceRepository.update(
-                { id: esimInvoice.id },
-                { isSentEmail: true }
-              );
-            }
+            else sendEmailAccount = sendEmail?.email;
+          } else {
+            throw new Error(
+              `User ${esimPurchase.userId} not found in transaction`,
+            );
           }
+        }
       }
+      const orderHtml = this.OrderMailBuilder(apiResponse);
+      await this.mailService.sendMail(
+        sendEmailAccount,
+        'Goy eSIM purchase',
+        orderHtml,
+      );
 
       // Return the API response as-is (it already matches the expected format)
       return {
@@ -3341,137 +3327,6 @@ export class TransactionsService {
       </div>
       `;
     return htmlTopup;
-  }
-
-  /**
-   * Get EsimInvoice by QPay invoice ID
-   * @param qpayInvoiceId - The QPay invoice ID
-   * @returns The EsimInvoice or null if not found
-   */
-  async getEsimInvoiceByQpayId(
-    qpayInvoiceId: string,
-  ): Promise<EsimInvoice | null> {
-    return await this.esimInvoiceRepository.findOne({
-      where: { qpayInvoiceId },
-      relations: ['customer'],
-    });
-  }
-
-  /**
-   * Check invoice status and process if paid (for cron jobs)
-   * @param qpayInvoiceId - The QPay invoice ID to check
-   * @returns Invoice status result
-   */
-  async checkInvoiceStatus(qpayInvoiceId: string): Promise<Record<string, unknown>> {
-    // Check invoice status from QPay
-    const invoiceStatus = (await this.qpayConnectionService.checkInvoice(
-      qpayInvoiceId,
-    )) as {
-      count: number;
-      rows?: Array<{ payment_status: string }>;
-      [key: string]: unknown;
-    };
-
-    // Check if invoice is paid
-    const isPaid =
-      invoiceStatus.count > 0 &&
-      invoiceStatus.rows?.some(
-        (row: { payment_status: string }) => row.payment_status === 'PAID',
-      );
-
-    if (isPaid) {
-      // Find the EsimInvoice record by QPay invoice ID
-      const esimInvoice = await this.getEsimInvoiceByQpayId(qpayInvoiceId);
-
-      if (esimInvoice && esimInvoice.packageCode) {
-        // Check if already processed
-        if (
-          esimInvoice.status !== 'PROCESSED' &&
-          esimInvoice.status !== 'PAID'
-        ) {
-          try {
-            // Process the invoice based on type (purchase or topup)
-            if (esimInvoice.iccId) {
-              // This is a topup invoice
-              const orderEsimDto = {
-                transactionId: undefined,
-                amount: esimInvoice.amount,
-                packageInfoList: [
-                  {
-                    packageCode: esimInvoice.packageCode,
-                    count: 1,
-                    price: esimInvoice.amount,
-                  },
-                ],
-              };
-
-              const orderResult = await this.topupEsimForCustomer(
-                qpayInvoiceId,
-                orderEsimDto,
-              );
-
-              return {
-                ...invoiceStatus,
-                orderPlaced: true,
-                orderNo: orderResult.orderNo,
-                transactionId: orderResult.transactionId,
-                message: 'Invoice paid and eSIM topup processed successfully',
-              };
-            } else {
-              // This is a purchase invoice
-              const orderEsimDto = {
-                transactionId: undefined,
-                amount: esimInvoice.amount,
-                packageInfoList: [
-                  {
-                    packageCode: esimInvoice.packageCode,
-                    count: 1,
-                    price: esimInvoice.amount,
-                  },
-                ],
-              };
-
-              const orderResult = await this.orderEsimForCustomer(
-                qpayInvoiceId,
-                orderEsimDto,
-              );
-
-              return {
-                ...invoiceStatus,
-                orderPlaced: true,
-                orderNo: orderResult.orderNo,
-                transactionId: orderResult.transactionId,
-                message: 'Invoice paid and eSIM order processed successfully',
-              };
-            }
-          } catch (error) {
-            this.logger.error(
-              `Failed to process invoice ${qpayInvoiceId}: ${error instanceof Error ? error.message : 'Unknown error'}`,
-            );
-
-            return {
-              ...invoiceStatus,
-              orderPlaced: false,
-              error: error instanceof Error ? error.message : 'Failed to process invoice',
-              message: 'Invoice is paid but processing failed',
-            };
-          }
-        } else {
-          return {
-            ...invoiceStatus,
-            orderPlaced: true,
-            alreadyProcessed: true,
-            message: 'Invoice already processed',
-          };
-        }
-      }
-    }
-
-    return {
-      ...invoiceStatus,
-      orderPlaced: false,
-      message: isPaid ? 'Invoice paid but no eSIM invoice found' : 'Invoice not paid yet',
-    };
   }
 
 }

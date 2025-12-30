@@ -3,10 +3,7 @@
     "builds": [
       {
         "src": "src/main.ts",
-        "use": "@vercel/node",
-        "config": {
-          "maxLambdaSize": "50mb"
-        }
+        "use": "@vercel/node"
       }
     ],
     "routes": [
@@ -15,16 +12,5 @@
         "dest": "src/main.ts",
         "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
       }
-    ],
-    "functions": {
-      "src/main.ts": {
-        "maxDuration": 30
-      }
-    },
-    "crons": [
-    {
-      "path": "/api/cron/check-pending-invoices",
-      "schedule": "*/5 * * * *"
-    }
-  ]
+    ]
   }
