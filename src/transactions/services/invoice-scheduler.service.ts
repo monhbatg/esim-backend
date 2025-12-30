@@ -56,6 +56,10 @@ export class InvoiceSchedulerService {
       `invoice-check-15min-${qpayInvoiceId}`,
       timeout15min,
     );
+    this.schedulerRegistry.addTimeout(
+      `invoice-check-20min-${qpayInvoiceId}`,
+      timeout20min,
+    );
   }
 
   /**
