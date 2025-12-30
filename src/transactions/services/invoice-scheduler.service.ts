@@ -18,7 +18,7 @@ export class InvoiceSchedulerService {
 
   /**
    * Schedule automatic invoice status checks after invoice creation
-   * Checks 4 times: at 5min, 10min, and 15min and 20min after creation
+   * Checks 4 times: at 5min, 10min, 15min, and 20min after creation
    */
   async scheduleInvoiceChecks(qpayInvoiceId: string): Promise<void> {
     this.logger.log(`Scheduling invoice checks for QPay ID: ${qpayInvoiceId}`);
@@ -212,7 +212,7 @@ export class InvoiceSchedulerService {
     qpayInvoiceId: string,
     currentCheckNumber: number,
   ): void {
-    const checkTimes = [15, 30, 45];
+    const checkTimes = [5, 10, 15, 20]; // minutes
     for (let i = currentCheckNumber; i < checkTimes.length; i++) {
       const timeoutName = `invoice-check-${checkTimes[i]}min-${qpayInvoiceId}`;
       try {
