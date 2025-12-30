@@ -21,6 +21,12 @@ export class InvoiceSchedulerService {
    * Checks 4 times: at 5min, 10min, 15min, and 20min after creation
    */
   async scheduleInvoiceChecks(qpayInvoiceId: string): Promise<void> {
+    // Skip scheduling in Vercel serverless environment
+    if (process.env.VERCEL) {
+      this.logger.log(`Skipping invoice scheduling for ${qpayInvoiceId} - running in Vercel serverless environment`);
+      return;
+    }
+
     this.logger.log(`Scheduling invoice checks for QPay ID: ${qpayInvoiceId}`);
 
     // Schedule check at 5 minutes

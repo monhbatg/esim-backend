@@ -124,7 +124,20 @@ async function bootstrap() {
     swaggerOptions: { persistAuthorization: true },
   });
 
+  // For Vercel serverless functions, don't call app.listen()
+  if (process.env.VERCEL) {
+    return app;
+  }
+
   await app.listen(process.env.PORT ?? 3001);
 }
 
-void bootstrap();
+// For Vercel deployment
+if (process.env.VERCEL) {
+  module.exports = bootstrap().then((app) => {
+    const server = app.getHttpAdapter().getInstance();
+    return server;
+  });
+} else {
+  void bootstrap();
+}
