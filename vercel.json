@@ -20,5 +20,11 @@
       "src/main.ts": {
         "maxDuration": 30
       }
+    },
+    "crons": [
+    {
+      "path": "/api/cron/check-pending-invoices",
+      "schedule": "*/5 * * * *"
     }
+  ]
   }

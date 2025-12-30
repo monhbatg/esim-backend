@@ -130,13 +130,17 @@ async function bootstrap() {
   }
 
   await app.listen(process.env.PORT ?? 3001);
+  return app;
 }
 
 // For Vercel deployment
 if (process.env.VERCEL) {
   module.exports = bootstrap().then((app) => {
-    const server = app.getHttpAdapter().getInstance();
-    return server;
+    if (app) {
+      const server = app.getHttpAdapter().getInstance();
+      return server;
+    }
+    throw new Error('App initialization failed');
   });
 } else {
   void bootstrap();

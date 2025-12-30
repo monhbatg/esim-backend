@@ -6,6 +6,7 @@ import { TransactionsService } from './transactions.service';
 import { TransactionsController } from './transactions.controller';
 import { CustomerTransactionsController } from './customer-transactions.controller';
 import { OpenEsimController } from './open-esim.controller';
+import { CronController } from './cron.controller';
 import { Transaction } from '../entities/transaction.entity';
 import { ESimPurchase } from '../entities/esim-purchase.entity';
 import { Customer } from '../entities/customer.entity';
@@ -37,7 +38,7 @@ import { DataPackageEntity } from 'src/entities/data-packages.entity';
     forwardRef(() => AuthModule), // Import AuthModule to access TokenBlacklistService for JwtAuthGuard
     forwardRef(() => InquiryModule), // Import InquiryModule to use InquiryPackagesService
   ],
-  controllers: [TransactionsController, CustomerTransactionsController, OpenEsimController],
+  controllers: [TransactionsController, CustomerTransactionsController, OpenEsimController, CronController],
   providers: [TransactionsService, QpayConnectionService, MailService, InvoiceSchedulerService],
   exports: [TransactionsService, QpayConnectionService, MailService, InvoiceSchedulerService], // Export for use in other modules if needed
 })

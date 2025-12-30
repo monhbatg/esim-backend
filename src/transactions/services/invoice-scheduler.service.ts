@@ -19,11 +19,13 @@ export class InvoiceSchedulerService {
   /**
    * Schedule automatic invoice status checks after invoice creation
    * Checks 4 times: at 5min, 10min, 15min, and 20min after creation
+   * NOTE: This only works in non-serverless environments (not Vercel)
    */
   async scheduleInvoiceChecks(qpayInvoiceId: string): Promise<void> {
     // Skip scheduling in Vercel serverless environment
     if (process.env.VERCEL) {
       this.logger.log(`Skipping invoice scheduling for ${qpayInvoiceId} - running in Vercel serverless environment`);
+      this.logger.log(`For automatic invoice checking on Vercel, use Vercel Cron Jobs or external cron services`);
       return;
     }
 
