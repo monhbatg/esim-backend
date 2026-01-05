@@ -101,8 +101,7 @@ export class QpayConnectionService {
       this.logger.log(`Token fetched successfully ${tokenData.access_token}`);
 
       // Save to DB
-      const expiresIn = 86400; // Default 24 hours token life time
-      const expiresAt = new Date(now.getTime() + expiresIn * 1000);
+      const expiresAt = new Date(now.getTime() + 86400 * 1000); // 24 hours token life time
 
       await this.configRepo.save({
         key: configKey,
@@ -162,6 +161,7 @@ export class QpayConnectionService {
       sender_branch_code: invoiceData.invoice_description,
       invoice_description:
         invoiceData.invoice_description || 'Default Invoice Description',
+      tax_type: '3',
       enable_expiry: invoiceData.enable_expiry ?? false,
       allow_partial: invoiceData.allow_partial ?? false,
       minimum_amount: invoiceData.minimum_amount ?? null,
@@ -218,7 +218,4 @@ export class QpayConnectionService {
     }
   }
 
-  
-  
-    
 }

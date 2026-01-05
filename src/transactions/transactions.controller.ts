@@ -901,22 +901,19 @@ export class TransactionsController {
     };
   }
 
-
-  //Topup purchase check
-
-
+  
   @Post('checkTopup/:invoiceId')
   @Public()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Check QPay invoice status',
+    summary: 'Check topup actions QPay invoice status',
     description:
-      'Нэхэмжлэл төлөгдсөн эсэхийг шалгах. If paid, automatically purchases the eSIM card.',
+      'Нэхэмжлэл төлөгдсөн эсэхийг шалгах. If paid, automatically topup the eSIM card.',
   })
   @ApiResponse({
     status: 200,
     description:
-      'Invoice status retrieved successfully. If paid, eSIM order is placed automatically.',
+      'Invoice status retrieved successfully. If paid, eSIM topup is automatically.',
   })
   @ApiResponse({
     status: 400,

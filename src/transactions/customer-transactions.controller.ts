@@ -71,7 +71,7 @@ export class CustomerTransactionsController {
     status: 201,
     description: 'Invoice created successfully',
   })
-  async topup(@Body(ValidationPipe) dto: CustomerTopupDto): Promise<any> {
+  async topup(@Body(ValidationPipe) dto: CustomerPurchaseDto ): Promise<any> {
     return await this.transactionsService.processCustomerTopup(dto);
   }
 }

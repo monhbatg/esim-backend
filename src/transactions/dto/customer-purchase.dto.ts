@@ -27,5 +27,4 @@ export class CustomerPurchaseDto {
   @IsString()
   @IsOptional()
   iccId?: string
-
 }
