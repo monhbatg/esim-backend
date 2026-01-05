@@ -2,13 +2,11 @@ import {
   Body,
   Controller,
   Delete,
-  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
   Param,
   Patch,
-  Post,
   Put,
   Query,
   Request,
@@ -41,19 +39,13 @@ import {
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { UserRole } from './dto/user-role.enum';
 import { User } from '../entities/user.entity';
-import type { ReferenceReq, UpdateRefs } from './dto/reference-request.dto';
-import { AdminService } from './admin.service';
-import type { SalaryReq } from './dto/salary-req.dto';
 
 @ApiTags('users')
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class UsersController {
-  constructor(
-    private readonly usersService: UsersService,
-    private readonly adminService: AdminService
-) {}
+  constructor(private readonly usersService: UsersService) {}
 
   @Get('profile')
   @ApiOperation({
@@ -412,171 +404,5 @@ export class UsersController {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password: _password, ...profile } = user;
     return profile as UserProfileResponseDto;
-  }
-
-  @Post('set/reference')
-  @ApiOperation({
-    summary: 'Set configuration parametrs',
-    description: 'Set configuration parametrs',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'User preferences retrieved successfully',
-    type: UserPreferencesDto,
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing token',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'User not found',
-  })
-  async setReferences(
-    @Request() req: AuthRequest,
-    @Body() body: ReferenceReq,
-  ): Promise<any> {
-    if(req.user.role === 'ADMIN')
-      return (await this.adminService.setReferences(
-        req.user.id, body
-      ));
-    else
-      throw new ForbiddenException;
-  }
-
-  @Get('getReference')
-  @ApiOperation({
-    summary: 'Set configuration parametrs',
-    description: 'Set configuration parametrs',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'User preferences retrieved successfully',
-    type: UserPreferencesDto,
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing token',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'User not found',
-  })
-  async getReferences(
-    @Request() req: AuthRequest,
-  ): Promise<any> {
-    if(req.user.role === 'ADMIN')
-      return (await this.adminService.getReferences());
-    else
-      throw new ForbiddenException;
-  }
-
-  @Post('update/reference')
-  @ApiOperation({
-    summary: 'Set configuration parametrs',
-    description: 'Set configuration parametrs',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'User preferences retrieved successfully',
-    type: UserPreferencesDto,
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing token',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'User not found',
-  })
-  async updateReferences(
-    @Request() req: AuthRequest,
-    @Body() body: UpdateRefs,
-  ): Promise<any> {
-    return (await this.adminService.updateReferences(
-      req.user.id, body
-    ));
-  }
-
-  @Get('getDashboard/:timeRange')
-  @ApiOperation({
-    summary: 'Get dashboard infos',
-    description: 'Get dashboard infos, onboarding, monitoring',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'User request successfully',
-    type: UserPreferencesDto,
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing token',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'User not found',
-  })
-  async getDashboard(
-    @Request() req: AuthRequest,
-    @Param('timeRange') timeRange: string,
-  ): Promise<any> {
-    if(req.user.role === 'ADMIN')
-      return (await this.adminService.getOnboard(timeRange));
-    else
-      throw new ForbiddenException;
-  }
-
-  @Get('calculateSalaryPre')
-  @ApiOperation({
-    summary: 'Get dashboard infos',
-    description: 'Get dashboard infos, onboarding, monitoring',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'User request successfully',
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing token',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'User not found',
-  })
-  async calculateSalaryPre(
-    @Request() req: AuthRequest,
-  ): Promise<any> {
-    if(req.user.role === 'ADMIN')
-      return (await this.adminService.calculateSalaryPre());
-    else
-      throw new ForbiddenException;
-  }
-
-  @Post('calculateSalaryFinal')
-  @HttpCode(200)
-  @ApiOperation({
-    summary: 'Get dashboard infos',
-    description: 'Get dashboard infos, onboarding, monitoring',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'User request successfully',
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing token',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'User not found',
-  })
-  async calculateSalaryFinal(
-    @Request() req: AuthRequest,
-    @Body() body: SalaryReq
-  ): Promise<any> {
-    if(req.user.role === 'ADMIN')
-      return (await this.adminService.calculateSalaryFinal(body));
-    else
-      throw new ForbiddenException;
   }
 }
