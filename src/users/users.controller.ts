@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -408,4 +409,59 @@ export class UsersController {
     return profile as UserProfileResponseDto;
   }
 
+  @Get('getDashboard/:timeRange')
+  @ApiOperation({
+    summary: 'Get dashboard infos',
+    description: 'Get dashboard infos, onboarding, monitoring',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User request successfully',
+    type: UserPreferencesDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async getDashboard(
+    @Request() req: AuthRequest,
+    @Param('timeRange') timeRange: string,
+  ): Promise<any> {
+    if(req.user.role === 'ADMIN')
+      return (await this.usersService.getOnboard(timeRange));
+    else
+      throw new ForbiddenException;
+  }
+
+  /*
+  @Get('calculateSalaryPre')
+  @ApiOperation({
+    summary: 'Get dashboard infos',
+    description: 'Get dashboard infos, onboarding, monitoring',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User request successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async calculateSalaryPre(
+    @Request() req: AuthRequest,
+  ): Promise<any> {
+    if(req.user.role === 'ADMIN')
+      return (await this.usersService.calculateSalaryPre());
+    else
+      throw new ForbiddenException;
+  }
+  */
 }
