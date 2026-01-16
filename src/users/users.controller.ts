@@ -41,9 +41,8 @@ import {
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { UserRole } from './dto/user-role.enum';
 import { User } from '../entities/user.entity';
-import type { ReferenceReq, UpdateRefs } from './dto/reference-request.dto';
 import type { SalaryReq } from './dto/salary-req.dto';
-import { AdminService } from './admin.service';
+import type { ReferenceReq, UpdateRefs } from './dto/reference-request.dto';
 
 @ApiTags('users')
 @Controller('users')
@@ -51,8 +50,7 @@ import { AdminService } from './admin.service';
 @ApiBearerAuth()
 export class UsersController {
   constructor(
-    private readonly usersService: UsersService,
-    private readonly adminService: AdminService
+    private readonly usersService: UsersService
 ) {}
 
   @Get('profile')
@@ -414,6 +412,7 @@ export class UsersController {
     return profile as UserProfileResponseDto;
   }
 
+  
   @Post('set/reference')
   @ApiOperation({
     summary: 'Set configuration parametrs',
@@ -437,13 +436,15 @@ export class UsersController {
     @Body() body: ReferenceReq,
   ): Promise<any> {
     if(req.user.role === 'ADMIN')
-      return (await this.adminService.setReferences(
+      return (await this.usersService.setReferences(
         req.user.id, body
       ));
     else
       throw new ForbiddenException;
   }
+  
 
+  
   @Get('getReference')
   @ApiOperation({
     summary: 'Set configuration parametrs',
@@ -466,11 +467,13 @@ export class UsersController {
     @Request() req: AuthRequest,
   ): Promise<any> {
     if(req.user.role === 'ADMIN')
-      return (await this.adminService.getReferences());
+      return (await this.usersService.getReferences());
     else
       throw new ForbiddenException;
   }
+  
 
+  
   @Post('update/reference')
   @ApiOperation({
     summary: 'Set configuration parametrs',
@@ -493,10 +496,11 @@ export class UsersController {
     @Request() req: AuthRequest,
     @Body() body: UpdateRefs,
   ): Promise<any> {
-    return (await this.adminService.updateReferences(
+    return (await this.usersService.updateReferences(
       req.user.id, body
     ));
   }
+  
 
   @Get('getDashboard/:timeRange')
   @ApiOperation({
@@ -521,7 +525,7 @@ export class UsersController {
     @Param('timeRange') timeRange: string,
   ): Promise<any> {
     if(req.user.role === 'ADMIN')
-      return (await this.adminService.getOnboard(timeRange));
+      return (await this.usersService.getOnboard(timeRange));
     else
       throw new ForbiddenException;
   }
@@ -547,7 +551,7 @@ export class UsersController {
     @Request() req: AuthRequest,
   ): Promise<any> {
     if(req.user.role === 'ADMIN')
-      return (await this.adminService.calculateSalaryPre());
+      return (await this.usersService.calculateSalaryPre());
     else
       throw new ForbiddenException;
   }
@@ -575,7 +579,7 @@ export class UsersController {
     @Body() body: SalaryReq
   ): Promise<any> {
     if(req.user.role === 'ADMIN')
-      return (await this.adminService.calculateSalaryFinal(body));
+      return (await this.usersService.calculateSalaryFinal(body));
     else
       throw new ForbiddenException;
   }

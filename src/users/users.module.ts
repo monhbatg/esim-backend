@@ -10,13 +10,12 @@ import { ESimPurchase } from 'src/entities/esim-purchase.entity';
 import { EsimInvoice } from 'src/entities/esim-invoice.entity';
 import { Customer } from 'src/entities/customer.entity';
 import { Wallet } from 'src/entities/wallet.entity';
-import { AdminService } from './admin.service';
 import { Salary } from 'src/entities/salary.entity';
 
 @Module({
   imports: [TypeOrmModule.forFeature([
     User,
-    SettingsReferences,
+    //SettingsReferences,
     ReferencesHistory,
     ESimPurchase, 
     EsimInvoice,
@@ -26,7 +25,7 @@ import { Salary } from 'src/entities/salary.entity';
     Salary
   ]), forwardRef(() => AuthModule)],
   controllers: [UsersController],
-  providers: [UsersService,AdminService],
-  exports: [UsersService,AdminService],
+  providers: [UsersService],
+  exports: [UsersService],
 })
 export class UsersModule {}
