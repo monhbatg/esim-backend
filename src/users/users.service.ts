@@ -14,12 +14,19 @@ import { UpdatePasswordDto } from './dto/update-password.dto';
 import { UserStatsResponseDto } from './dto/user-response.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { UserRole } from './dto/user-role.enum';
+import { ReferencesHistory } from 'src/entities/reference-history.entity';
+import { SettingsReferences } from 'src/entities/settings-references.entity';
+import { ReferenceReq, UpdateRefs } from './dto/reference-request.dto';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(SettingsReferences)
+    private readonly referenceRepository: Repository<SettingsReferences>,
+    @InjectRepository(ReferencesHistory)
+    private readonly refHistoryRepo: Repository<ReferencesHistory>,
   ) {}
 
   async create(createUserDto: SignUpDto): Promise<User> {
@@ -258,5 +265,73 @@ export class UsersService {
       where: { role },
       order: { createdAt: 'DESC' },
     });
+  }
+
+  async setReferences(id: string, body: ReferenceReq): Promise<any>{
+    const existConf = await this.referenceRepository.findOne({where: {key: body.key}});
+    if(existConf ){
+      if(existConf.value!=body.value){
+      const historyRef = this.refHistoryRepo.create({
+        referenceId: existConf.id,
+        module: body.module,
+        key: body.key,
+        type: body.type,
+        oldValue: existConf.value,
+        newValue: body.value,
+        changedBy: id
+      });
+      historyRef.changedAt = new Date();
+      await this.refHistoryRepo.save(historyRef);
+      await this.referenceRepository.update({ 
+        key: existConf.key },
+        {
+         value: body.value,
+         updatedAt: new Date()
+        },);
+      const writedRes = await  this.referenceRepository.findOne({where: {key: body.key}});
+    return writedRes;
+      }else{
+        throw new BadRequestException('Already exists');
+      }
+    }else{
+      const refReport = this.referenceRepository.create({
+      module: body.module,
+      key: body.key,
+      type: body.type,
+      value: body.value,
+      description: body.description,
+      userId: id
+    });
+    refReport.createdAt = new Date();
+    refReport.updatedAt = new Date();
+
+    await this.referenceRepository.save(refReport);
+    }
+  }
+    
+  async getReferences(): Promise<any>{
+    const references = await this.referenceRepository.find({
+      order: {
+        module: 'DESC', // Orders by 'createdAt' in descending order
+      },});
+    return references;
+  }
+
+  async updateReferences(id: string, body: UpdateRefs): Promise<any> {
+    const existConf = await this.referenceRepository.findOne({where: {id: body.id, userId: id}});
+    if(existConf){
+      existConf!.value= body.value;
+      await this.referenceRepository.update(existConf!.id,existConf!);
+    }else{
+      throw new BadRequestException('Та засах эрхгүй байна');
+    }
+    const response = {
+      statusCode: 200,
+      data: await this.getReferences(),
+      message: "Амжилттай",
+      error: "",
+      success:true
+    }    
+    return response;
   }
 }
