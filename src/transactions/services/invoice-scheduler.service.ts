@@ -1,9 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { SchedulerRegistry } from '@nestjs/schedule';
 import { QpayConnectionService } from './qpay.connection.service';
 import { TransactionsService } from '../transactions.service';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, LessThan } from 'typeorm';
 import { EsimInvoice } from '../../entities/esim-invoice.entity';
 
 @Injectable()
@@ -11,63 +10,99 @@ export class InvoiceSchedulerService {
   private readonly logger = new Logger(InvoiceSchedulerService.name);
 
   constructor(
-    private readonly schedulerRegistry: SchedulerRegistry,
     private readonly qpayConnectionService: QpayConnectionService,
     private readonly transactionsService: TransactionsService,
+    @InjectRepository(EsimInvoice)
+    private readonly esimInvoiceRepo: Repository<EsimInvoice>,
   ) {}
 
   /**
-   * Schedule automatic invoice status checks after invoice creation
-   * Checks 4 times: at 5min, 10min, and 15min and 20min after creation
+   * Schedule invoice checks by storing metadata in database
+   * Vercel cron jobs will call the API endpoints at scheduled times
+   * This approach works in serverless environment without Redis
    */
   async scheduleInvoiceChecks(qpayInvoiceId: string): Promise<void> {
     this.logger.log(`Scheduling invoice checks for QPay ID: ${qpayInvoiceId}`);
 
-    // Schedule check at 5 minutes
-    const timeout5min = setTimeout(async () => {
-      await this.performInvoiceCheck(qpayInvoiceId, 1);
-    }, 5 * 60 * 1000); // 5 minutes
+    try {
+      // Find the invoice record
+      const esimInvoice = await this.esimInvoiceRepo.findOne({
+        where: { qpayInvoiceId },
+      });
 
-    // Schedule check at 10 minutes
-    const timeout10min = setTimeout(async () => {
-      await this.performInvoiceCheck(qpayInvoiceId, 2);
-    }, 10 * 60 * 1000); // 10 minutes
+      if (!esimInvoice) {
+        this.logger.warn(`EsimInvoice not found for QPay ID: ${qpayInvoiceId}`);
+        return;
+      }
 
-    // Schedule check at 15 minutes
-    const timeout15min = setTimeout(async () => {
-      await this.performInvoiceCheck(qpayInvoiceId, 3);
-    }, 15 * 60 * 1000); // 15 minutes
+      // Update invoice with check metadata for tracking
+      await this.esimInvoiceRepo.update(
+        { qpayInvoiceId },
+        {
+          checkScheduledAt: new Date(),
+          nextCheckTime: new Date(Date.now() + 5 * 60 * 1000), // Next check in 5 minutes
+        },
+      );
 
-    // Schedule check at 20 minutes
-    const timeout20min = setTimeout(async () => {
-      await this.performInvoiceCheck(qpayInvoiceId, 4);
-    }, 20 * 60 * 1000); // 20 minutes
+      this.logger.log(
+        `Successfully marked invoice checks for QPay ID: ${qpayInvoiceId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to schedule invoice checks for ${qpayInvoiceId}: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+      );
+      throw error;
+    }
+  }
 
-    // Register timeouts for potential cleanup
-    this.schedulerRegistry.addTimeout(
-      `invoice-check-5min-${qpayInvoiceId}`,
-      timeout5min,
+  /**
+   * Process pending invoice checks (called by Vercel cron jobs)
+   * Finds all invoices that need checking and processes them
+   */
+  async processPendingInvoiceChecks(checkIntervalMinutes: number): Promise<void> {
+    this.logger.log(
+      `Processing pending invoice checks (interval: ${checkIntervalMinutes} min)`,
     );
-    this.schedulerRegistry.addTimeout(
-      `invoice-check-10min-${qpayInvoiceId}`,
-      timeout10min,
-    );
-    this.schedulerRegistry.addTimeout(
-      `invoice-check-15min-${qpayInvoiceId}`,
-      timeout15min,
-    );
+
+    try {
+      // Find all invoices that were scheduled for checking and are not yet processed
+      const pendingInvoices = await this.esimInvoiceRepo.find({
+        where: {
+          checkScheduledAt: LessThan(
+            new Date(Date.now() - checkIntervalMinutes * 60 * 1000),
+          ),
+          status: 'PENDING',
+        },
+        order: { createdAt: 'DESC' },
+      });
+
+      this.logger.log(
+        `Found ${pendingInvoices.length} invoices to check`,
+      );
+
+      for (const esimInvoice of pendingInvoices) {
+        await this.performInvoiceCheck(esimInvoice);
+      }
+    } catch (error) {
+      this.logger.error(
+        `Error processing pending invoice checks: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+      );
+    }
   }
 
   /**
    * Perform a single invoice status check
    */
-  private async performInvoiceCheck(
-    qpayInvoiceId: string,
-    checkNumber: number,
-  ): Promise<void> {
+  private async performInvoiceCheck(esimInvoice: EsimInvoice): Promise<void> {
+    const qpayInvoiceId = esimInvoice.qpayInvoiceId;
+
     try {
       this.logger.log(
-        `Performing invoice check ${checkNumber} for QPay ID: ${qpayInvoiceId}`,
+        `Performing invoice check for QPay ID: ${qpayInvoiceId}`,
       );
 
       // Check invoice status from QPay
@@ -90,10 +125,6 @@ export class InvoiceSchedulerService {
         this.logger.log(
           `Invoice ${qpayInvoiceId} is paid. Processing eSIM order...`,
         );
-
-        // Find the EsimInvoice record by QPay invoice ID
-        const esimInvoice =
-          await this.transactionsService.getEsimInvoiceByQpayId(qpayInvoiceId);
 
         if (esimInvoice && esimInvoice.packageCode) {
           // Check if already processed
@@ -156,22 +187,23 @@ export class InvoiceSchedulerService {
 
               // Check email sent status
               if (esimInvoice) {
-                const emailSentStatus = esimInvoice.isSentEmail ? 'Email sent' : 'Email not sent';
+                const emailSentStatus = esimInvoice.isSentEmail
+                  ? 'Email sent'
+                  : 'Email not sent';
                 if (emailSentStatus === 'Email not sent') {
                   await this.transactionsService.queryEsimPurchases({
                     orderNo: orderResult.orderNo,
                   });
                 }
               } else {
-                this.logger.warn(`EsimInvoice not found for QPay ID: ${qpayInvoiceId}`);
+                this.logger.warn(
+                  `EsimInvoice not found for QPay ID: ${qpayInvoiceId}`,
+                );
               }
 
               this.logger.log(
                 `eSIM order placed successfully for invoice ${qpayInvoiceId}. Order No: ${orderResult.orderNo}`,
               );
-
-              // Cancel remaining scheduled checks since order is placed
-              this.cancelRemainingChecks(qpayInvoiceId, checkNumber);
             } catch (error) {
               this.logger.error(
                 `Failed to place eSIM order for invoice ${qpayInvoiceId}: ${
@@ -181,46 +213,21 @@ export class InvoiceSchedulerService {
             }
           } else {
             this.logger.log(
-              `Invoice ${qpayInvoiceId} already processed. Cancelling remaining checks.`,
+              `Invoice ${qpayInvoiceId} already processed`,
             );
-            // Cancel remaining scheduled checks
-            this.cancelRemainingChecks(qpayInvoiceId, checkNumber);
           }
         }
       } else {
         this.logger.log(
-          `Invoice ${qpayInvoiceId} check ${checkNumber}: Not paid yet`,
+          `Invoice ${qpayInvoiceId} check: Not paid yet`,
         );
       }
     } catch (error) {
       this.logger.error(
-        `Error during invoice check ${checkNumber} for ${qpayInvoiceId}: ${
+        `Error during invoice check for ${qpayInvoiceId}: ${
           error instanceof Error ? error.message : 'Unknown error'
         }`,
       );
-    }
-  }
-
-  /**
-   * Cancel remaining scheduled checks for an invoice
-   */
-  private cancelRemainingChecks(
-    qpayInvoiceId: string,
-    currentCheckNumber: number,
-  ): void {
-    const checkTimes = [15, 30, 45];
-    for (let i = currentCheckNumber; i < checkTimes.length; i++) {
-      const timeoutName = `invoice-check-${checkTimes[i]}min-${qpayInvoiceId}`;
-      try {
-        const timeout = this.schedulerRegistry.getTimeout(timeoutName);
-        if (timeout) {
-          clearTimeout(timeout);
-          this.schedulerRegistry.deleteTimeout(timeoutName);
-          this.logger.log(`Cancelled scheduled check: ${timeoutName}`);
-        }
-      } catch (error) {
-        // Timeout might not exist or already executed
-      }
     }
   }
 }

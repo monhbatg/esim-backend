@@ -45,6 +45,12 @@ export class EsimInvoice {
   @Column({ type: 'json', nullable: true })
   invoiceData: any; // Store full invoice response/data
 
+  @Column({ nullable: true })
+  checkScheduledAt: Date; // Timestamp when invoice check was scheduled
+
+  @Column({ nullable: true })
+  nextCheckTime: Date; // Next scheduled check time
+
   @CreateDateColumn()
   createdAt: Date;
 
