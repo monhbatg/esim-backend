@@ -15,14 +15,12 @@ import { CustomerPurchaseDto } from './dto/customer-purchase.dto';
 import { CustomerLookupDto } from './dto/customer-lookup.dto';
 import { CustomerDataResponseDto } from './dto/customer-data-response.dto';
 import { TransactionsService } from './transactions.service';
-import { InvoiceSchedulerService } from './services/invoice-scheduler.service';
 
 @ApiTags('customer-transactions')
 @Controller('customer/transactions')
 export class CustomerTransactionsController {
   constructor(
-    private readonly transactionsService: TransactionsService,
-    private readonly invoiceSchedulerService: InvoiceSchedulerService
+    private readonly transactionsService: TransactionsService
 ) {}
 
   @Post('purchase')
@@ -36,14 +34,7 @@ export class CustomerTransactionsController {
     description: 'Invoice created successfully',
   })
   async purchase(@Body(ValidationPipe) dto: CustomerPurchaseDto): Promise<any> {
-    const result = await this.transactionsService.processCustomerPurchase(dto);
-
-    // Schedule automatic invoice checks at 5, 10, and 15 minutes
-    if (result.invoice_id) {
-      await this.invoiceSchedulerService.scheduleInvoiceChecks(result.invoice_id);
-    }
-
-    return result;
+    return await this.transactionsService.processCustomerPurchase(dto);
   }
 
   @Get('lookup')
