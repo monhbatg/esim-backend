@@ -17,10 +17,13 @@ import { InquiryModule } from '../inquiry/inquiry.module';
 import { MailService } from './services/mail.service';
 import { User } from '../entities/user.entity';
 import { DataPackageEntity } from '../entities/data-packages.entity';
+import { InvoiceSchedulerService } from './services/invoice-scheduler.service';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
     HttpModule, // Import HttpModule for making API calls to eSIM Access
+    ScheduleModule.forRoot(), // Import ScheduleModule for SchedulerRegistry
     TypeOrmModule.forFeature([
       Transaction,
       ESimPurchase,
@@ -35,7 +38,7 @@ import { DataPackageEntity } from '../entities/data-packages.entity';
     forwardRef(() => InquiryModule), // Import InquiryModule to use InquiryPackagesService
   ],
   controllers: [TransactionsController, CustomerTransactionsController, OpenEsimController],
-  providers: [TransactionsService, QpayConnectionService, MailService],
-  exports: [TransactionsService, QpayConnectionService, MailService], // Export for use in other modules if needed
+  providers: [TransactionsService, QpayConnectionService, MailService, InvoiceSchedulerService],
+  exports: [TransactionsService, QpayConnectionService, MailService, InvoiceSchedulerService], // Export for use in other modules if needed
 })
 export class TransactionsModule {}
