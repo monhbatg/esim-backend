@@ -12,23 +12,5 @@
         "dest": "src/main.ts",
         "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
       }
-    ],
-    "crons": [
-      {
-        "path": "/api/cron/invoice-check-5min",
-        "schedule": "*/5 * * * *"
-      },
-      {
-        "path": "/api/cron/invoice-check-10min",
-        "schedule": "*/10 * * * *"
-      },
-      {
-        "path": "/api/cron/invoice-check-15min",
-        "schedule": "*/15 * * * *"
-      },
-      {
-        "path": "/api/cron/invoice-check-20min",
-        "schedule": "*/20 * * * *"
-      }
     ]
   }

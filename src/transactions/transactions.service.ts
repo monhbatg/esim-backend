@@ -2314,49 +2314,38 @@ export class TransactionsService {
       });
       let sendEmailAccount = '';
       if (esimPurchase) {
-        const esimInvoice = await this.esimInvoiceRepository.findOne({
-          where: { id: esimPurchase.invoiceId! },
-        });
-          if(esimInvoice){
-            if (esimInvoice.isSentEmail === false) {
-              if (esimPurchase.customerId) {
-                const sendEmail = await this.customerRepository.findOne({
-                  where: { id: esimPurchase.customerId },
-                });
-                if (!sendEmail)
-                  throw new Error(
-                    `Customer ${esimPurchase.customerId} not found in transaction`,
-                  );
-                else sendEmailAccount = sendEmail.email;
-              } else {
-                if (esimPurchase.userId) {
-                  const sendEmail = await this.userRepository.findOne({
-                    where: { id: esimPurchase.userId },
-                  });
-                  if (!sendEmail)
-                    throw new Error(
-                      `User ${esimPurchase.userId} not found in transaction`,
-                    );
-                  else sendEmailAccount = sendEmail?.email;
-                } else {
-                  throw new Error(
-                    `User ${esimPurchase.userId} not found in transaction`,
-                  );
-                }
-              }
-              const orderHtml = this.OrderMailBuilder(apiResponse);
-              await this.mailService.sendMail(
-                sendEmailAccount,
-                'Goy eSIM purchase',
-                orderHtml,
+        if (esimPurchase.customerId) {
+          const sendEmail = await this.customerRepository.findOne({
+            where: { id: esimPurchase.customerId },
+          });
+          if (!sendEmail)
+            throw new Error(
+              `Customer ${esimPurchase.customerId} not found in transaction`,
+            );
+          else sendEmailAccount = sendEmail.email;
+        } else {
+          if (esimPurchase.userId) {
+            const sendEmail = await this.userRepository.findOne({
+              where: { id: esimPurchase.userId },
+            });
+            if (!sendEmail)
+              throw new Error(
+                `User ${esimPurchase.userId} not found in transaction`,
               );
-              await this.esimInvoiceRepository.update(
-                { id: esimInvoice.id },
-                { isSentEmail: true }
-              );
-            }
+            else sendEmailAccount = sendEmail?.email;
+          } else {
+            throw new Error(
+              `User ${esimPurchase.userId} not found in transaction`,
+            );
           }
+        }
       }
+      const orderHtml = this.OrderMailBuilder(apiResponse);
+      await this.mailService.sendMail(
+        sendEmailAccount,
+        'Goy eSIM purchase',
+        orderHtml,
+      );
 
       // Return the API response as-is (it already matches the expected format)
       return {

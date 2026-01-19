@@ -35,21 +35,12 @@ export class EsimInvoice {
   @Column({ nullable: true })
   customerId: string;
 
-  @Column({ default: false })
-  isSentEmail: boolean;
-
   @ManyToOne(() => Customer)
   @JoinColumn({ name: 'customerId' })
   customer: Customer;
 
   @Column({ type: 'json', nullable: true })
   invoiceData: any; // Store full invoice response/data
-
-  @Column({ nullable: true })
-  checkScheduledAt: Date; // Timestamp when invoice check was scheduled
-
-  @Column({ nullable: true })
-  nextCheckTime: Date; // Next scheduled check time
 
   @CreateDateColumn()
   createdAt: Date;
