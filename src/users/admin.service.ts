@@ -516,8 +516,7 @@ export class AdminService {
 }
 
 function getDateRange(timeRange: string): { start: any; end: any; } {
-  const nowSystem = new Date();  // Create a new Date object representing the current date and time
-  const now = new Date(nowSystem.getTime() + 8 * 60 * 60 * 1000);   // Adjust to Ulaanbaatar time (UTC+8)
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ulaanbaatar' }));
   const startOfDay = new Date(now.setHours(0, 0, 0, 0));  // Start of the day (00:00:00)
   const endOfDay = new Date(now.setHours(23, 59, 59, 999));  // End of the day (23:59:59)
   switch (timeRange) {
@@ -579,8 +578,13 @@ function getSalaryDate(): {start: any; end: any; title: string}{
     let titleName = '';
     lastDay.setDate(today.getDate() - 1);
     lastDay.setHours(23, 59, 59, 999);
-    const dayOfMonthSystem = today.getDate(); // Get the current day of the month
-    const dayOfMonth = new Date(dayOfMonthSystem.getTime() + 8 * 60 * 60 * 1000); // Adjust to Ulaanbaatar time (UTC+8)
+    const today = new Date();
+
+    const ulaanbaatarDate = new Date(
+    today.toLocaleString('en-US', { timeZone: 'Asia/Ulaanbaatar' })
+    );
+
+    const dayOfMonth = ulaanbaatarDate.getDate();
 
     if (dayOfMonth === 5) {
         firstDay.setMonth(today.getMonth() - 1);  // Go back to previous month
