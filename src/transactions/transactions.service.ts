@@ -2350,7 +2350,7 @@ export class TransactionsService {
                 'Goy eSIM purchase',
                 orderHtml,
               );
-                          await this.esimInvoiceRepository.update(
+              await this.esimInvoiceRepository.update(
                 { id: esimInvoice.id },
                 { isSentEmail: true }
               );
