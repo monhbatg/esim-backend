@@ -8,6 +8,7 @@ import {
   HttpStatus,
   Param,
   Patch,
+  Post,
   Put,
   Query,
   Request,
@@ -40,6 +41,7 @@ import {
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { UserRole } from './dto/user-role.enum';
 import { User } from '../entities/user.entity';
+import type { ReferenceReq, UpdateRefs } from './dto/reference-request.dto';
 
 @ApiTags('users')
 @Controller('users')
@@ -409,6 +411,90 @@ export class UsersController {
     return profile as UserProfileResponseDto;
   }
 
+  @Post('set/reference')
+  @ApiOperation({
+    summary: 'Set configuration parametrs',
+    description: 'Set configuration parametrs',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User preferences retrieved successfully',
+    type: UserPreferencesDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async setReferences(
+    @Request() req: AuthRequest,
+    @Body() body: ReferenceReq,
+  ): Promise<any> {
+    if(req.user.role === 'ADMIN')
+      return (await this.usersService.setReferences(
+        req.user.id, body
+      ));
+    else
+      throw new ForbiddenException;
+  }
+
+  @Get('getReference')
+  @ApiOperation({
+    summary: 'Set configuration parametrs',
+    description: 'Set configuration parametrs',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User preferences retrieved successfully',
+    type: UserPreferencesDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async getReferences(
+    @Request() req: AuthRequest,
+  ): Promise<any> {
+    if(req.user.role === 'ADMIN')
+      return (await this.usersService.getReferences());
+    else
+      throw new ForbiddenException;
+  }
+
+  @Post('update/reference')
+  @ApiOperation({
+    summary: 'Set configuration parametrs',
+    description: 'Set configuration parametrs',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User preferences retrieved successfully',
+    type: UserPreferencesDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async updateReferences(
+    @Request() req: AuthRequest,
+    @Body() body: UpdateRefs,
+  ): Promise<any> {
+    return (await this.usersService.updateReferences(
+      req.user.id, body
+    ));
+  }
+
   @Get('getDashboard/:timeRange')
   @ApiOperation({
     summary: 'Get dashboard infos',
@@ -437,7 +523,7 @@ export class UsersController {
       throw new ForbiddenException;
   }
 
-  /*
+  
   @Get('calculateSalaryPre')
   @ApiOperation({
     summary: 'Get dashboard infos',
@@ -463,5 +549,4 @@ export class UsersController {
     else
       throw new ForbiddenException;
   }
-  */
 }
