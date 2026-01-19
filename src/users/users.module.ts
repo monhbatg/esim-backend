@@ -11,6 +11,7 @@ import { ReferencesHistory } from '../entities/reference-history.entity';
 import { ConfigVariables } from '../entities/references.entity';
 import { Salary } from 'src/entities/salary.entity';
 import { Wallet } from 'src/entities/wallet.entity';
+import { AdminService } from './admin.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([
@@ -24,7 +25,7 @@ import { Wallet } from 'src/entities/wallet.entity';
     Wallet
   ]), forwardRef(() => AuthModule)],
   controllers: [UsersController],
-  providers: [UsersService],
-  exports: [UsersService],
+  providers: [UsersService, AdminService],
+  exports: [UsersService, AdminService],
 })
 export class UsersModule {}
