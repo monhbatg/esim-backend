@@ -578,7 +578,6 @@ function getSalaryDate(): {start: any; end: any; title: string}{
     let titleName = '';
     lastDay.setDate(today.getDate() - 1);
     lastDay.setHours(23, 59, 59, 999);
-    const today = new Date();
 
     const ulaanbaatarDate = new Date(
     today.toLocaleString('en-US', { timeZone: 'Asia/Ulaanbaatar' })
