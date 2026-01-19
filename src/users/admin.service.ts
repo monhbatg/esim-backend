@@ -576,7 +576,7 @@ function getSalaryDate(): {start: any; end: any; title: string}{
     const firstDay = new Date(today);
     const lastDay = new Date(today);
     let titleName = '';
-    lastDay.setDate(today.getDate() - 1);
+    lastDay.setDate(today.getDate());
     lastDay.setHours(23, 59, 59, 999);
 
     const ulaanbaatarDate = new Date(
