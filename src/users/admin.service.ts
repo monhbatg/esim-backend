@@ -192,12 +192,12 @@ export class AdminService {
         
             // Convert price (USD) to supply amount and convert to MNT
             const supplyAmount = Number(item.price/10000); // Supply amount in USD for example (you can adjust this)
-            const supplyAmountMNT = supplyAmount * Number(currencyValue?.value); // USD to MNT 
+            const supplyAmountMNT = Math.round( Number(supplyAmount) * Number(currencyValue?.value)); // USD to MNT 
         
             // Calculating buy amount (with and without tax) from the price
             const buyAmountWithTax = Number(item.invoiceAmount);
             const buyAmountWithoutTax = item.invoiceAmount*((100-Number(qpayTaxPercent?.value))/100); // Assuming no tax in this example
-            const pureAmount = buyAmountWithoutTax - supplyAmountMNT;
+            const pureAmount = Number(buyAmountWithoutTax - supplyAmountMNT);
             itemCounter++;
             // Return the new object
             return {
