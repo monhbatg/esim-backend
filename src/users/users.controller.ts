@@ -43,6 +43,7 @@ import { UserRole } from './dto/user-role.enum';
 import { User } from '../entities/user.entity';
 import type { ReferenceReq, UpdateRefs } from './dto/reference-request.dto';
 import { AdminService } from './admin.service';
+import type { SalaryReq } from './dto/salary-req.dto';
 
 @ApiTags('users')
 @Controller('users')
