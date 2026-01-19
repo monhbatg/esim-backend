@@ -8,12 +8,12 @@ import { Customer } from 'src/entities/customer.entity';
 import { EsimInvoice } from 'src/entities/esim-invoice.entity';
 import { ESimPurchase } from 'src/entities/esim-purchase.entity';
 import { ReferencesHistory } from 'src/entities/reference-history.entity';
-import { ConfigReferences } from 'src/entities/references.entity';
+import { SettingsVariables } from 'src/entities/settings-conf';
 
 @Module({
   imports: [TypeOrmModule.forFeature([
     User,
-    ConfigReferences,
+    SettingsVariables,
     ReferencesHistory,
     ESimPurchase,
     EsimInvoice,

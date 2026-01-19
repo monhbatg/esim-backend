@@ -9,8 +9,8 @@ import {
     UpdateDateColumn 
 } from "typeorm";
 
-@Entity('settings_references')
-export class ConfigReferences {
+@Entity('settings_variables')
+export class SettingsVariables {
     @PrimaryGeneratedColumn('uuid')
     id: string;
     
