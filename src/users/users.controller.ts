@@ -42,6 +42,7 @@ import { UpdateRoleDto } from './dto/update-role.dto';
 import { UserRole } from './dto/user-role.enum';
 import { User } from '../entities/user.entity';
 import type { ReferenceReq, UpdateRefs } from './dto/reference-request.dto';
+import { AdminService } from './admin.service';
 
 @ApiTags('users')
 @Controller('users')
@@ -49,7 +50,8 @@ import type { ReferenceReq, UpdateRefs } from './dto/reference-request.dto';
 @ApiBearerAuth()
 export class UsersController {
   constructor(
-    private readonly usersService: UsersService
+    private readonly usersService: UsersService,
+    private readonly adminService: AdminService
 ) {}
 
   @Get('profile')
@@ -434,7 +436,7 @@ export class UsersController {
     @Body() body: ReferenceReq,
   ): Promise<any> {
     if(req.user.role === 'ADMIN')
-      return (await this.usersService.setReferences(
+      return (await this.adminService.setReferences(
         req.user.id, body
       ));
     else
@@ -463,7 +465,7 @@ export class UsersController {
     @Request() req: AuthRequest,
   ): Promise<any> {
     if(req.user.role === 'ADMIN')
-      return (await this.usersService.getReferences());
+      return (await this.adminService.getReferences());
     else
       throw new ForbiddenException;
   }
@@ -490,7 +492,7 @@ export class UsersController {
     @Request() req: AuthRequest,
     @Body() body: UpdateRefs,
   ): Promise<any> {
-    return (await this.usersService.updateReferences(
+    return (await this.adminService.updateReferences(
       req.user.id, body
     ));
   }
@@ -518,7 +520,7 @@ export class UsersController {
     @Param('timeRange') timeRange: string,
   ): Promise<any> {
     if(req.user.role === 'ADMIN')
-      return (await this.usersService.getOnboard(timeRange));
+      return (await this.adminService.getOnboard(timeRange));
     else
       throw new ForbiddenException;
   }
@@ -545,7 +547,7 @@ export class UsersController {
     @Request() req: AuthRequest,
   ): Promise<any> {
     if(req.user.role === 'ADMIN')
-      return (await this.usersService.calculateSalaryPre());
+      return (await this.adminService.calculateSalaryPre());
     else
       throw new ForbiddenException;
   }
