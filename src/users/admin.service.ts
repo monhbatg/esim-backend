@@ -187,7 +187,7 @@ export class AdminService {
             const customerMail =  customer!.email;  
             // Convert transaction date string to Date object
             let transactionDate = item.createdAt;                                       // Assuming item.createdAt is a Date object
-            transactionDate.setHours(transactionDate.getHours() + 8);                   // Add 8 hours to the current date Ulaanbaatar
+            //transactionDate.setHours(transactionDate.getHours() + 8);                   // Add 8 hours to the current date Ulaanbaatar
             transactionDate = transactionDate.toISOString().replace('T', ' ').split('.')[0];
         
             // Convert price (USD) to supply amount and convert to MNT
