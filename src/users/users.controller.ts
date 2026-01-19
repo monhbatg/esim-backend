@@ -551,4 +551,32 @@ export class UsersController {
     else
       throw new ForbiddenException;
   }
+
+  @Post('calculateSalaryFinal')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Get dashboard infos',
+    description: 'Get dashboard infos, onboarding, monitoring',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User request successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async calculateSalaryFinal(
+    @Request() req: AuthRequest,
+    @Body() body: SalaryReq
+  ): Promise<any> {
+    if(req.user.role === 'ADMIN')
+      return (await this.adminService.calculateSalaryFinal(body));
+    else
+      throw new ForbiddenException;
+  }
 }
