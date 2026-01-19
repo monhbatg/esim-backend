@@ -17,7 +17,7 @@ import { UserRole } from './dto/user-role.enum';
 import { EsimInvoice } from 'src/entities/esim-invoice.entity';
 import { ESimPurchase } from 'src/entities/esim-purchase.entity';
 import { Customer } from 'src/entities/customer.entity';
-import { SettingsReferences } from 'src/entities/settings-references.entity';
+import { ConfigReferences } from 'src/entities/references.entity';
 
 @Injectable()
 export class UsersService {
@@ -28,8 +28,8 @@ export class UsersService {
     private readonly esimPurchaseRepo: Repository<ESimPurchase>,
     @InjectRepository(EsimInvoice)
     private readonly esimInvoiceRepo: Repository<EsimInvoice>,
-    @InjectRepository(SettingsReferences)
-    private readonly referenceRepository: Repository<SettingsReferences>,
+    @InjectRepository(ConfigReferences)
+    private readonly referenceRepository: Repository<ConfigReferences>,
     @InjectRepository(Customer)
     private readonly customerRepository: Repository<Customer>,
   ) {}

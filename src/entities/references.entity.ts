@@ -10,7 +10,7 @@ import {
 } from "typeorm";
 
 @Entity('settings_references')
-export class SettingsReferences {
+export class ConfigReferences {
     @PrimaryGeneratedColumn('uuid')
     id: string;
     
