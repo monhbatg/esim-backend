@@ -16,8 +16,8 @@ import { UpdateRoleDto } from './dto/update-role.dto';
 import { UserRole } from './dto/user-role.enum';
 import { EsimInvoice } from 'src/entities/esim-invoice.entity';
 import { ESimPurchase } from 'src/entities/esim-purchase.entity';
-import { SettingsReferences } from 'src/entities/settings-references.entity';
 import { Customer } from 'src/entities/customer.entity';
+import { SettingsReferences } from 'src/entities/settings-references.entity';
 
 @Injectable()
 export class UsersService {
