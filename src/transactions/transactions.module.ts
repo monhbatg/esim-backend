@@ -15,8 +15,8 @@ import { QpayConnectionService } from './services/qpay.connection.service';
 import { SystemConfig } from '../entities/system-config.entity';
 import { InquiryModule } from '../inquiry/inquiry.module';
 import { MailService } from './services/mail.service';
-import { User } from 'src/entities/user.entity';
-import { DataPackageEntity } from 'src/entities/data-packages.entity';
+import { User } from '../entities/user.entity';
+import { DataPackageEntity } from '../entities/data-packages.entity';
 
 @Module({
   imports: [

@@ -35,8 +35,8 @@ import { QueryTransactionsDto } from './dto/query-transactions.dto';
 import { QueryEsimDto } from './dto/query-esim.dto';
 import { QpayConnectionService } from './services/qpay.connection.service';
 import { MailService } from './services/mail.service';
-import { User } from 'src/entities/user.entity';
-import { DataPackageEntity } from 'src/entities/data-packages.entity';
+import { User } from '../entities/user.entity';
+import { DataPackageEntity } from '../entities/data-packages.entity';
 
 export interface EsimItem {
   esimTranNo: string;

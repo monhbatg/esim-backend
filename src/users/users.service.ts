@@ -14,10 +14,10 @@ import { UpdatePasswordDto } from './dto/update-password.dto';
 import { UserStatsResponseDto } from './dto/user-response.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { UserRole } from './dto/user-role.enum';
-import { EsimInvoice } from 'src/entities/esim-invoice.entity';
-import { ESimPurchase } from 'src/entities/esim-purchase.entity';
-import { Customer } from 'src/entities/customer.entity';
-import { ConfigVariables } from 'src/entities/references.entity';
+import { EsimInvoice } from '../entities/esim-invoice.entity';
+import { ESimPurchase } from '../entities/esim-purchase.entity';
+import { Customer } from '../entities/customer.entity';
+import { ConfigVariables } from '../entities/references.entity';
 
 @Injectable()
 export class UsersService {

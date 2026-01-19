@@ -1,6 +1,6 @@
 
-import { ReferencesModule } from "src/users/dto/reference-module.enum";
-import { ReferencesType } from "src/users/dto/reference-type.enum";
+import { ReferencesModule } from "../users/dto/reference-module.enum";
+import { ReferencesType } from "../users/dto/reference-type.enum";
 import { 
     Column, 
     CreateDateColumn, 
