@@ -580,4 +580,30 @@ export class UsersController {
     else
       throw new ForbiddenException;
   }
+
+  @Get('dashboard')
+  @ApiOperation({
+    summary: 'Get dashboard infos',
+    description: 'Get dashboard infos, onboarding, monitoring',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User request successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async dashboard(
+    @Request() req: AuthRequest,
+  ): Promise<any> {
+    if(req.user.role === 'ADMIN')
+      return (await this.adminService.getDashboard());
+    else
+      throw new ForbiddenException;
+  }
 }
