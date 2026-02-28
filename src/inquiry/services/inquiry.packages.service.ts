@@ -14,7 +14,7 @@ import { CreateDataPackageDto } from '../dto/create-data-package.dto';
 import { DataPackageMapper } from '../mapper/data-package.mapper';
 import { DataPackageEntity } from '../../entities/data-packages.entity';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Like, Repository } from 'typeorm';
 import { Util } from '../../transactions/utils/util';
 import { EsimItem } from '../dto/esim.package.response.dto';
 import { TransactionsService } from '../../transactions/transactions.service';
@@ -583,6 +583,22 @@ export class InquiryPackagesService {
       return results;
     } catch (error) {
       this.handleError(error, 'Failed to fetch local packages with filters');
+    }
+  }
+
+  // search name from packages using like condition  2026/02/26 new endpoint for operator 
+  async getPackagesByName(name: string): Promise<DataPackageEntity[]> {
+    try {
+      const results = await this.dataPackageRepo.find({
+        //like condition for name search
+        where: {
+          name: Like(`%${name}%`),
+        },
+      });
+      this.logger.log(`Found ${results.length} packages matching name: ${name}`);
+      return results;
+    } catch (error) {
+      this.handleError(error, 'Failed to fetch packages by name');
     }
   }
 }
