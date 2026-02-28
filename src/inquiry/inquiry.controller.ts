@@ -378,4 +378,27 @@ export class InquiryController {
     const packages = await this.inquiryPackagesService.getLocalPackages();
     return packages;
   }
+
+  // search name from packages
+  @Get('searchName/:name')
+  @ApiOperation({
+    summary: 'Search packages by name',
+    description: 'Search eSIM packages by name',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully retrieved packages',
+    type: DataPackageDto,
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Failed to search packages by name',
+  })
+  async searchPackagesByName(
+    @Param('name') name: string,
+  ): Promise<DataPackageDto[]> {
+    const packages = await this.inquiryPackagesService.getPackagesByName(name);
+    return packages;
+  }
+
 }

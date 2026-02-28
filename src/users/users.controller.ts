@@ -44,6 +44,8 @@ import { User } from '../entities/user.entity';
 import type { ReferenceReq, UpdateRefs } from './dto/reference-request.dto';
 import { AdminService } from './admin.service';
 import type { SalaryReq } from './dto/salary-req.dto';
+import { OperatorService } from './operator.service';
+import { CustomerPurchaseDto } from 'src/transactions/dto/customer-purchase.dto';
 
 @ApiTags('users')
 @Controller('users')
@@ -52,7 +54,8 @@ import type { SalaryReq } from './dto/salary-req.dto';
 export class UsersController {
   constructor(
     private readonly usersService: UsersService,
-    private readonly adminService: AdminService
+    private readonly adminService: AdminService,
+    private readonly operatorService: OperatorService,
 ) {}
 
   @Get('profile')
@@ -603,6 +606,99 @@ export class UsersController {
   ): Promise<any> {
     if(req.user.role === 'ADMIN')
       return (await this.adminService.getDashboard());
+    else
+      throw new ForbiddenException;
+  }
+
+
+  //2026/02/26 NEW development
+  // Нийт нэхэмжлэлийн мэдээллийг авахад ашиглана мөн мэйл болон утасны дугаараар хайлт хийх боломжтой
+  @Get('invoices')
+  @ApiOperation({
+    summary: 'Get all invoices',
+    description: 'Get all invoices, with optional filtering by email or phone number',
+  })
+  @ApiQuery({
+    name: 'email',
+    required: false,
+    description: 'Filter invoices by customer email',
+  })
+  @ApiQuery({
+    name: 'phoneNumber',
+    required: false,
+    description: 'Filter invoices by customer phone number',
+  })
+  async getInvoices(
+    @Request() req: AuthRequest,
+    @Query('email') email?: string,
+    @Query('phoneNumber') phoneNumber?: string,
+  ): Promise<any> {
+    if(req.user.role === 'ADMIN')
+      return (await this.operatorService.getAllInvoices(email, phoneNumber));
+    else
+      throw new ForbiddenException;
+  }
+
+  //Чатаар борлуулалт хийхэд QPay нэхэмжлэлийг үүсгэхэд ашиглана
+  @Post('qpay-invoice')
+  @ApiOperation({
+    summary: 'Create QPay invoice',
+    description: 'Create a QPay invoice for a customer purchase',
+  })
+  @ApiBody({ type: CustomerPurchaseDto })
+  @ApiResponse({
+    status: 200,
+    description: 'QPay invoice created successfully',
+  })
+  @ApiResponse({
+    status: 400,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  async createQPayInvoice(
+    @Request() req: AuthRequest,
+    @Body(ValidationPipe) customerPurchaseDto: CustomerPurchaseDto,
+  ): Promise<any> {
+    if(req.user.role === 'ADMIN')
+      return (await this.operatorService.getQPayInvoice(customerPurchaseDto));
+    else
+      throw new ForbiddenException;
+  }
+
+  //Тухайн хэрэглэгчийн төлбөрийн мэдээллийг шалгахад ашиглана
+  @Post('check-payment/:invoiceId')
+  @ApiOperation({
+    summary: 'Check payment status',
+    description: 'Check payment status for a specific invoice ID',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment status checked successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Invalid invoice ID',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  async checkPaymentStatus(
+    @Request() req: AuthRequest,
+    @Param('invoiceId') invoiceId: string
+  ): Promise<any> {
+    if(req.user.role !== 'USER')
+      return (await this.operatorService.checkPaymentStatus(invoiceId));
     else
       throw new ForbiddenException;
   }
