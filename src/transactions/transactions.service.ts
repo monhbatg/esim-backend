@@ -2582,11 +2582,14 @@ export class TransactionsService {
       );
 
       //find Related Packages and add to response
-      const relatedPackages = await this.dataPackageRepo.find({
-        where: { locationCode: apiResponse.obj.esimList[0].packageList[0].locationCode,
-          buyPrice : MoreThan(0)
-        },
-      });
+      let relatedPackages: any[] = [];
+      if(apiResponse.obj?.esimList[0]?.esimStatus !== 'USED_EXPIRED') {
+        relatedPackages = await this.dataPackageRepo.find({
+          where: { locationCode: apiResponse.obj.esimList[0].packageList[0].locationCode,
+            buyPrice : MoreThan(0)
+          },
+        });
+      }
       const orderLog = await this.esimPurchaseRepository.findOne({ where: {orderNo: apiResponse.obj.esimList[0].orderNo}});
       let phoneNumber= '';
       let email='';
