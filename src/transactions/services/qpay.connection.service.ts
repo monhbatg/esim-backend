@@ -143,6 +143,8 @@ export class QpayConnectionService {
   }
 
   private buildInvoice(invoiceData: InvoiceRequest): InvoiceRequest {
+    this.logger.log(`Building invoice data for: ${invoiceData.invoice_code}`);
+    this.logger.log(`callback_url: http://localhost:3001/api/transactions/check/${invoiceData.invoice_code}`);
     return {
       ...invoiceData,
       invoice_code: this.qpayInvoiceCode!,
@@ -158,7 +160,8 @@ export class QpayConnectionService {
       minimum_amount: invoiceData.minimum_amount ?? null,
       allow_exceed: invoiceData.allow_exceed ?? false,
       maximum_amount: invoiceData.maximum_amount ?? null,
-      callback_url: invoiceData.callback_url || '',
+      callback_url:
+                    "http://localhost:3001/api/transactions/check/"+invoiceData.invoice_code,
       sender_staff_code: '',
       sender_terminal_code: invoiceData.sender_terminal_code || undefined,
       sender_terminal_data: invoiceData.sender_terminal_data || { name: null },

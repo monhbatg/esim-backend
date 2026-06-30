@@ -694,12 +694,12 @@ export class UsersController {
     description: 'Forbidden - Admin access required',
   })
   async checkPaymentStatus(
-    @Request() req: AuthRequest,
+    //@Request() req: AuthRequest,
     @Param('invoiceId') invoiceId: string
   ): Promise<any> {
-    if(req.user.role !== 'USER')
+    //if(req.user.role !== 'USER')
       return (await this.operatorService.checkPaymentStatus(invoiceId));
-    else
-      throw new ForbiddenException;
+    //else
+      //throw new ForbiddenException;
   }
 }
