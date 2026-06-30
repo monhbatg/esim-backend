@@ -2583,7 +2583,7 @@ export class TransactionsService {
 
       //find Related Packages and add to response
       let relatedPackages: any[] = [];
-      if(apiResponse.obj?.esimList[0]?.esimStatus !== 'USED_EXPIRED') {
+      if(apiResponse.obj?.esimList[0]?.esimStatus !== 'USED_EXPIRED' && apiResponse.obj?.esimList[0]?.esimStatus !== 'CANCEL') {
         relatedPackages = await this.dataPackageRepo.find({
           where: { locationCode: apiResponse.obj.esimList[0].packageList[0].locationCode,
             buyPrice : MoreThan(0)
@@ -3228,7 +3228,7 @@ export class TransactionsService {
         
         }
       }
-      const topupHtml = this.TopupMailBuilder(currentEsim.obj.esimList);
+      const topupHtml = this.TopupMailBuilder(currentEsim.obj.esimList, esimPurchase?esimPurchase: new ESimPurchase());
       await this.mailService.sendMail(
         sendEmailAccount,
         'Goy SIM topup', 
@@ -3252,15 +3252,14 @@ export class TransactionsService {
     }
   }
 
-  TopupMailBuilder(esimList: EsimItem[]): string{
+  TopupMailBuilder(esimList: EsimItem[], esimPurchase: ESimPurchase): string{
     const htmlTopup = `
       <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
 
         <p>Эрхэм харилцагч танд,</p>
 
         <p>
-          Манай бүтээгдэхүүн үйлчилгээг сонгон захиалсан танд баярлалаа🍀 Таны eSIM-ны ЦЭНЭГЛЭЛТ-ийн мэдээллийг илгээж байна.  
-          Та төхөөрөмж дээрээ идэвхжүүлэхийн тулд QR кодыг уншуулж хэрэглэнэ үү.
+          Таны eSIM амжилттай цэнэглэгдлээ.eSIM-ний ЦЭНЭГЛЭЛТ-ийн мэдээллийг доор илгээж байна.  
         </p>
 
         <p><strong>Таны цэнэглэсэн багцын мэдээлэл:</strong></p>
@@ -3279,6 +3278,10 @@ export class TransactionsService {
                 <p style="line-height:50%;"><strong>Захиалгын дугаар(orderNo):</strong> ${esimList[0].orderNo}</p>
                 <p style="line-height:50%;"><strong>eSIM дугаар(esimTranNo):</strong> ${esimList[0].esimTranNo}</p>
                 <p style="line-height:50%;"><strong>ICCID дугаар(iccid):</strong> ${esimList[0].iccid}</p>
+                <p style="line-height:50%;"><strong>Багцын нэр:</strong> ${esimPurchase.packageName}</p>
+                <p style="line-height:50%;"><strong>Багцын дата:</strong> ${esimPurchase.dataVolume / (1024 ** 3)} GB</p>
+                <p style="line-height:50%;"><strong>Хүчинтэй хугацаа:</strong> ${esimPurchase.duration} Хоног</p>
+                <p style="line-height:50%;"><strong>Үнэ:</strong> ${esimPurchase.price} төгрөг</p>
                 <p style="line-height:50%">
                   <strong>APN:</strong>
                   <a href=${esimList[0].apn} target="_blank">${esimList[0].apn}</a>
