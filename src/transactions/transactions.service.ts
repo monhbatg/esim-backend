@@ -942,12 +942,16 @@ export class TransactionsService {
     // 2. Create QPay Invoice
     // Generate unique sender_invoice_no
     const senderInvoiceNo = `CUSTOMER-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    // get amount from DB using packageCode
+    const dataPackage = await this.dataPackageRepo.findOne({
+      where: { packageCode: dto.packageCode },
+    });
 
     const invoiceRequest: any = {
       sender_invoice_no: senderInvoiceNo,
       invoice_receiver_code: dto.phoneNumber,
       invoice_description: dto.packageCode+', '+dto.phoneNumber+', Захиалга' || 'Customer eSIM Purchase',
-      amount: dto.amount,
+      amount: dataPackage.buyPrice,
       callback_url: `${process.env.API_URL || 'http://localhost:3000'}/customer/transactions/callback/${senderInvoiceNo}`,
       invoice_receiver_data: {
         register: '',
@@ -2681,12 +2685,16 @@ export class TransactionsService {
     // 2. Create QPay Invoice
     // Generate unique sender_invoice_no
     const senderInvoiceNo = `CUSTOMER-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    // get amount from DB using packageCode
+    const dataPackage = await this.dataPackageRepo.findOne({
+      where: { packageCode: dto.packageCode },
+    });
 
     const invoiceRequest: any = {
       sender_invoice_no: senderInvoiceNo,
       invoice_receiver_code: dto.phoneNumber,
       invoice_description: dto.packageCode+', '+dto.phoneNumber+', Цэнэглэлт' || 'Customer eSIM Topup',
-      amount: dto.amount,
+      amount: dataPackage.buyPrice ,
       callback_url: `${process.env.API_URL || 'http://localhost:3000'}/customer/transactions/callback/${senderInvoiceNo}`,
       invoice_receiver_data: {
         register: '',
