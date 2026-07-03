@@ -942,16 +942,20 @@ export class TransactionsService {
     // 2. Create QPay Invoice
     // Generate unique sender_invoice_no
     const senderInvoiceNo = `CUSTOMER-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    // get amount from DB using packageCode
+    // get amount from DB using packageCode not null
     const dataPackage = await this.dataPackageRepo.findOne({
       where: { packageCode: dto.packageCode },
     });
+
+    if (!dataPackage) {
+      throw new BadRequestException('Invalid package code');
+    }
 
     const invoiceRequest: any = {
       sender_invoice_no: senderInvoiceNo,
       invoice_receiver_code: dto.phoneNumber,
       invoice_description: dto.packageCode+', '+dto.phoneNumber+', Захиалга' || 'Customer eSIM Purchase',
-      amount: dataPackage.buyPrice,
+      amount:  dataPackage.buyPrice, // Use buyPrice from DB if available, else fallback to dto.amount
       callback_url: `${process.env.API_URL || 'http://localhost:3000'}/customer/transactions/callback/${senderInvoiceNo}`,
       invoice_receiver_data: {
         register: '',
@@ -2344,7 +2348,12 @@ export class TransactionsService {
           }
         }
       }
-      const orderHtml = this.OrderMailBuilder(apiResponse);
+      // get amount from DB using packageCode
+      const lastDataPackage = await this.dataPackageRepo.findOne({
+        where: { packageCode: esimPurchase?.packageCode },
+      });
+      const amount = lastDataPackage?.buyPrice || 0;
+      const orderHtml = this.OrderMailBuilder(apiResponse,amount);
       await this.mailService.sendMail(
         sendEmailAccount,
         'Goy eSIM purchase',
@@ -2398,11 +2407,12 @@ export class TransactionsService {
     }
   }
 
-  OrderMailBuilder(apiResponse: any): string {
+  OrderMailBuilder(apiResponse: any, amount: number): string {
     const ac = apiResponse.obj.esimList[0].ac;
     const parts = ac.split('$');
     const smdp = parts[1];
     const activationCode = parts[2];
+    
 
     const htmlOrder = `
       <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
@@ -2442,6 +2452,7 @@ export class TransactionsService {
                 <p style="line-height:50%;"><strong>ICCID дугаар(iccid):</strong> ${apiResponse.obj.esimList[0].iccid}</p>
                 <p style="line-height:50%;"><strong>Багцын нэр:</strong> ${apiResponse.obj.esimList[0].packageList[0].packageName}</p>
                 <p style="line-height:50%;"><strong>Хүчинтэй хугацаа:</strong> ${apiResponse.obj.esimList[0].expiredTime}</p>
+                <p style="line-height:50%;"><strong>Үнэ:</strong> ${amount} төгрөг</p>
 
                 <p style=" style="line-height:50%;display:inline"">
                   <strong>SM-DP+ Хаяг:</strong>
@@ -2690,11 +2701,15 @@ export class TransactionsService {
       where: { packageCode: dto.packageCode },
     });
 
+    if (!dataPackage) {
+      throw new BadRequestException('Invalid package code');
+    }
+
     const invoiceRequest: any = {
       sender_invoice_no: senderInvoiceNo,
       invoice_receiver_code: dto.phoneNumber,
       invoice_description: dto.packageCode+', '+dto.phoneNumber+', Цэнэглэлт' || 'Customer eSIM Topup',
-      amount: dataPackage.buyPrice ,
+      amount: dataPackage.buyPrice,
       callback_url: `${process.env.API_URL || 'http://localhost:3000'}/customer/transactions/callback/${senderInvoiceNo}`,
       invoice_receiver_data: {
         register: '',
@@ -3236,7 +3251,13 @@ export class TransactionsService {
         
         }
       }
-      const topupHtml = this.TopupMailBuilder(currentEsim.obj.esimList, esimPurchase?esimPurchase: new ESimPurchase());
+
+      // get amount from DB using packageCode
+      const lastDataPackage = await this.dataPackageRepo.findOne({
+        where: { packageCode: esimPurchase?.packageCode },
+      });
+      const amount = lastDataPackage?.buyPrice || 0;
+      const topupHtml = this.TopupMailBuilder(currentEsim.obj.esimList, esimPurchase?esimPurchase: new ESimPurchase(), amount);
       await this.mailService.sendMail(
         sendEmailAccount,
         'Goy SIM topup', 
@@ -3260,7 +3281,7 @@ export class TransactionsService {
     }
   }
 
-  TopupMailBuilder(esimList: EsimItem[], esimPurchase: ESimPurchase): string{
+  TopupMailBuilder(esimList: EsimItem[], esimPurchase: ESimPurchase, amount: number): string{
     const htmlTopup = `
       <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
 
@@ -3289,7 +3310,7 @@ export class TransactionsService {
                 <p style="line-height:50%;"><strong>Багцын нэр:</strong> ${esimPurchase.packageName}</p>
                 <p style="line-height:50%;"><strong>Багцын дата:</strong> ${esimPurchase.dataVolume / (1024 ** 3)} GB</p>
                 <p style="line-height:50%;"><strong>Хүчинтэй хугацаа:</strong> ${esimPurchase.duration} Хоног</p>
-                <p style="line-height:50%;"><strong>Үнэ:</strong> ${esimPurchase.price} төгрөг</p>
+                <p style="line-height:50%;"><strong>Үнэ:</strong> ${amount} төгрөг</p>
                 <p style="line-height:50%">
                   <strong>APN:</strong>
                   <a href=${esimList[0].apn} target="_blank">${esimList[0].apn}</a>
