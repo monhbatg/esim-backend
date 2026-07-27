@@ -269,6 +269,7 @@ export class OperatorService {
                 "invoice.createdAt",
                 "invoice.amount",
                 "invoice.status",
+                "invoice.iccId",
                 "customer.email",
                 "customer.phoneNumber",
                 "package.name" // 👈 select package name
