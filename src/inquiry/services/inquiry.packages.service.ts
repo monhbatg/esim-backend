@@ -601,4 +601,36 @@ export class InquiryPackagesService {
       this.handleError(error, 'Failed to fetch packages by name');
     }
   }
+
+  //refactor endpoint for operator 2026/07/28
+  async actionEsimOrder(actionNo: number, targetEsimTranNo: string): Promise<any[]> {
+    try {
+      this.logger.log(`Performing action ${actionNo} on eSIM: ${targetEsimTranNo}`);
+
+      this.logger.log(
+        `Found eSIM. esimTranNo=${targetEsimTranNo}, proceeding with action ${actionNo}`,
+      );
+
+      const url = `${this.apiBaseUrl}${Util.selectUrl(actionNo)}`;
+      this.logger.log(`Fetching data packages from: ${url}`);
+      const response: any = await firstValueFrom(
+        this.httpService.post<ApiResponse>(
+          url,
+          {
+            esimTranNo: targetEsimTranNo,
+          },
+          {
+            headers: {
+              'RT-AccessCode': this.accessCode,
+              'Content-Type': 'application/json',
+            },
+            timeout: 10000,
+          },
+        ),
+      );
+      return response.data;
+    } catch (error) {
+      this.handleError(error, 'Failed to get My eSIM packages');
+    }
+  }
 }

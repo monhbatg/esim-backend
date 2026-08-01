@@ -401,4 +401,33 @@ export class InquiryController {
     return packages;
   }
 
+  @Post('esim/action/:actionId/transno/:transNo')
+  @ApiOperation({
+    summary: 'Get all bought data packages',
+    description:
+      'eSIM web-с transNo ашиглан тухайн eSIM багц дээр action хийх 1-cancel, 2-suspend, 3-unsuspend, 4-revoke',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully retrieved data packages',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Failed to fetch data packages from external API',
+  })
+  async actionEsimPackage(
+    @Param('actionId', new ParseIntPipe()) actionId: number,
+    @Param('transNo') transNo: string,
+    @Request() req: AuthRequest,
+  ): Promise<any> {
+    const packages = await this.inquiryPackagesService.actionEsimOrder(
+      actionId,
+      transNo,
+    );
+    return packages;
+  }
 }
