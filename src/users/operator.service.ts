@@ -45,12 +45,14 @@ export class OperatorService {
         if (isPaid) {
             const esimInvoice = await this.transactionsService.getEsimInvoiceByQpayId(qpayInvoiceId);
 
-            if (esimInvoice && esimInvoice.packageCode) {
-                // Check if already processed
-                if (
-                  esimInvoice.status !== 'PROCESSED' &&
-                  esimInvoice.status !== 'PAID'
-                ) {
+            if(esimInvoice?.iccId === null){
+              // if ICCID is null, its new esim payment
+              if (esimInvoice && esimInvoice.packageCode) {
+                  // Check if already processed
+                  if (
+                    esimInvoice.status !== 'PROCESSED' &&
+                    esimInvoice.status !== 'PAID'
+                  ) {
                     try {
                         // Inquire eSIM package details from API using packageCode
                         this.logger.log(
@@ -167,37 +169,63 @@ export class OperatorService {
                           message: 'Invoice is paid but eSIM order failed',
                         };
                     }
-                } else {
-                  // Already processed
-                  const invoiceData = esimInvoice.invoiceData as
-                    | { orderNo?: string }
-                    | undefined;
-        
-                  // Try to get orderNo from ESimPurchase records
-                  let esimOrderNo = invoiceData?.orderNo;
-                  try {
-                    const purchases =
-                      await this.transactionsService.getEsimPurchasesByInvoiceId(
-                        esimInvoice.id,
+                  } else {
+                    // Already processed
+                    const invoiceData = esimInvoice.invoiceData as
+                      | { orderNo?: string }
+                      | undefined;
+                  
+                    // Try to get orderNo from ESimPurchase records
+                    let esimOrderNo = invoiceData?.orderNo;
+                    try {
+                      const purchases =
+                        await this.transactionsService.getEsimPurchasesByInvoiceId(
+                          esimInvoice.id,
+                        );
+                      if (purchases.length > 0 && purchases[0].orderNo) {
+                        esimOrderNo = purchases[0].orderNo;
+                      }
+                    } catch (error) {
+                      // If we can't get from purchases, use invoiceData.orderNo
+                      this.logger.warn(
+                        `Could not retrieve orderNo from purchases for already processed invoice: ${error instanceof Error ? error.message : 'Unknown'}`,
                       );
-                    if (purchases.length > 0 && purchases[0].orderNo) {
-                      esimOrderNo = purchases[0].orderNo;
                     }
-                  } catch (error) {
-                    // If we can't get from purchases, use invoiceData.orderNo
-                    this.logger.warn(
-                      `Could not retrieve orderNo from purchases for already processed invoice: ${error instanceof Error ? error.message : 'Unknown'}`,
-                    );
+                  
+                    return {
+                      ...invoiceStatus,
+                      orderPlaced: true,
+                      alreadyProcessed: true,
+                      orderNo: esimOrderNo || null,
+                      message: 'Invoice already processed',
+                    };
                   }
-        
-                  return {
-                    ...invoiceStatus,
-                    orderPlaced: true,
-                    alreadyProcessed: true,
-                    orderNo: esimOrderNo || null,
-                    message: 'Invoice already processed',
-                  };
-                }
+              }
+            }else{
+              // ICCID is not null, its meaning topup already esim
+              this.logger.log(`Invoice (QPay ID: ${qpayInvoiceId}) is a top-up for existing eSIM with ICCID: ${esimInvoice?.iccId}`);
+              const orderEsimDto = {
+                transactionId: undefined, // Will be auto-generated (eSIM order transaction ID)
+                amount: esimInvoice?.amount ?? 0,
+                packageInfoList: [
+                  {
+                    packageCode: esimInvoice?.packageCode ?? '',
+                    count: 1,
+                    price: esimInvoice?.amount ?? 0,
+                  },
+                ],
+              };
+              const topupInfo = await this.transactionsService.topupEsimForCustomer(
+                qpayInvoiceId,
+                orderEsimDto as any,
+              );
+
+              return {
+                ...invoiceStatus,
+                orderPlaced: true,
+                orderNo: topupInfo.orderNo,
+                message: 'Invoice is a top-up for existing eSIM, new order placed',
+              };
             }
         }
 
