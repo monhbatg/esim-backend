@@ -3229,7 +3229,8 @@ export class TransactionsService {
         );
       }
       //================ EMail Notification =================================
-      const esimPurchase = await this.esimPurchaseRepository.findOne({where: { orderNo: orderNo}})
+      const esimPurchase = await this.esimPurchaseRepository.findOne({where: { invoiceId: qpayInvoiceId}})
+      const esimInvoiceData = await this.esimInvoiceRepository.findOne({where: {qpayInvoiceId: qpayInvoiceId}})
       let sendEmailAccount ='';
       if(esimPurchase){
         if(esimPurchase.customerId){
@@ -3257,7 +3258,7 @@ export class TransactionsService {
         where: { packageCode: esimPurchase?.packageCode },
       });
       const amount = lastDataPackage?.buyPrice || 0;
-      const topupHtml = this.TopupMailBuilder(currentEsim.obj.esimList, esimPurchase?esimPurchase: new ESimPurchase(), amount);
+      const topupHtml = this.TopupMailBuilder(currentEsim.obj.esimList, lastDataPackage, amount);
       await this.mailService.sendMail(
         sendEmailAccount,
         'Goy SIM topup', 
@@ -3281,7 +3282,7 @@ export class TransactionsService {
     }
   }
 
-  TopupMailBuilder(esimList: EsimItem[], esimPurchase: ESimPurchase, amount: number): string{
+  TopupMailBuilder(esimList: EsimItem[], dataPackage: any, amount: number): string{
     const htmlTopup = `
       <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
 
@@ -3307,10 +3308,10 @@ export class TransactionsService {
                 <p style="line-height:50%;"><strong>Захиалгын дугаар(orderNo):</strong> ${esimList[0].orderNo}</p>
                 <p style="line-height:50%;"><strong>eSIM дугаар(esimTranNo):</strong> ${esimList[0].esimTranNo}</p>
                 <p style="line-height:50%;"><strong>ICCID дугаар(iccid):</strong> ${esimList[0].iccid}</p>
-                <p style="line-height:50%;"><strong>Багцын нэр:</strong> ${esimPurchase.packageName}</p>
-                <p style="line-height:50%;"><strong>Багцын дата:</strong> ${esimPurchase.dataVolume / (1024 ** 3)} GB</p>
-                <p style="line-height:50%;"><strong>Хүчинтэй хугацаа:</strong> ${esimPurchase.duration} Хоног</p>
-                <p style="line-height:50%;"><strong>Үнэ:</strong> ${amount} төгрөг</p>
+                <p style="line-height:50%;"><strong>Багцын нэр:</strong> ${dataPackage.name}</p>
+                <p style="line-height:50%;"><strong>Багцын дата:</strong> ${dataPackage.volume / (1024 ** 3)}GB</p>
+                <p style="line-height:50%;"><strong>Хүчинтэй хугацаа:</strong> ${dataPackage.duration}Хоног</p>
+                <p style="line-height:50%;"><strong>Үнэ:</strong> ${dataPackage.buyPrice}төгрөг</p>
                 <p style="line-height:50%">
                   <strong>APN:</strong>
                   <a href=${esimList[0].apn} target="_blank">${esimList[0].apn}</a>
