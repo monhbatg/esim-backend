@@ -2709,7 +2709,7 @@ export class TransactionsService {
       sender_invoice_no: senderInvoiceNo,
       invoice_receiver_code: dto.phoneNumber,
       invoice_description: dto.packageCode+', '+dto.phoneNumber+', Цэнэглэлт' || 'Customer eSIM Topup',
-      amount: dataPackage.buyPrice,
+      amount: dataPackage.buyPrice,     // qpay invoice amount
       callback_url: `${process.env.API_URL || 'http://localhost:3000'}/customer/transactions/callback/${senderInvoiceNo}`,
       invoice_receiver_data: {
         register: '',
@@ -3229,8 +3229,8 @@ export class TransactionsService {
         );
       }
       //================ EMail Notification =================================
-      const esimPurchase = await this.esimPurchaseRepository.findOne({where: { invoiceId: qpayInvoiceId}})
-      const esimInvoiceData = await this.esimInvoiceRepository.findOne({where: {qpayInvoiceId: qpayInvoiceId}})
+      const esimPurchase = await this.esimPurchaseRepository.findOne({where: { orderNo: orderNo}});
+      const esimInvoiceData = await this.esimInvoiceRepository.findOne({where: {qpayInvoiceId: qpayInvoiceId}});
       let sendEmailAccount ='';
       if(esimPurchase){
         if(esimPurchase.customerId){
@@ -3255,7 +3255,7 @@ export class TransactionsService {
 
       // get amount from DB using packageCode
       const lastDataPackage = await this.dataPackageRepo.findOne({
-        where: { packageCode: esimPurchase?.packageCode },
+        where: { packageCode: esimInvoiceData?.packageCode },
       });
       const amount = lastDataPackage?.buyPrice || 0;
       const topupHtml = this.TopupMailBuilder(currentEsim.obj.esimList, lastDataPackage, amount);
