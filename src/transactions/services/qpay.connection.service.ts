@@ -144,12 +144,15 @@ export class QpayConnectionService {
 
   private buildInvoice(invoiceData: InvoiceRequest): InvoiceRequest {
     this.logger.log(`Building invoice data for: ${invoiceData.invoice_code}`);
-    this.logger.log(`callback_url: http://localhost:3001/api/transactions/check/${invoiceData.invoice_code}`);
+    const senderInvoiceNo =
+      invoiceData.sender_invoice_no || `GOY_SIM-${Date.now()}`;
+    const apiBaseUrl = ( `https://esim-backend.vercel.app`);
+    const callbackUrl = `${apiBaseUrl}/api/transactions/qpay-callback/${encodeURIComponent(senderInvoiceNo)}`;
+    this.logger.log(`QPay callback URL: ${callbackUrl}`);
     return {
       ...invoiceData,
       invoice_code: this.qpayInvoiceCode!,
-      sender_invoice_no:
-        invoiceData.sender_invoice_no || `GOY_SIM-${Date.now()}`,
+      sender_invoice_no: senderInvoiceNo,
       invoice_receiver_code: invoiceData.invoice_receiver_code || 'GOY_SIM',
       sender_branch_code: invoiceData.invoice_description,
       invoice_description:
@@ -160,8 +163,7 @@ export class QpayConnectionService {
       minimum_amount: invoiceData.minimum_amount ?? null,
       allow_exceed: invoiceData.allow_exceed ?? false,
       maximum_amount: invoiceData.maximum_amount ?? null,
-      callback_url:
-                    "http://localhost:3001/api/transactions/check/"+invoiceData.invoice_code,
+      callback_url: callbackUrl,
       sender_staff_code: '',
       sender_terminal_code: invoiceData.sender_terminal_code || undefined,
       sender_terminal_data: invoiceData.sender_terminal_data || { name: null },

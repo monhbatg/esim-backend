@@ -80,7 +80,15 @@ Handle the response to show payment interfaces:
 - Use the `qr_link` to redirect the user to their banking app or show a list of available banks supported by QPay.
 
 ### Step 4: Payment Verification (Callback)
-The backend is configured with a `callback_url` that QPay will call upon successful payment. 
+QPay calls the backend at
+`POST /api/transactions/qpay-callback/{senderInvoiceNo}` after a payment event.
+The backend uses the saved sender invoice number to find the QPay invoice, then
+checks the payment directly with QPay before automatically placing the eSIM order
+or top-up. The callback request itself is not treated as proof of payment.
+
+Configure the backend origin used by `QpayConnectionService` to a public HTTPS
+URL so QPay can reach the callback. A localhost URL cannot receive callbacks
+from QPay.
 
 *Note: If you need to poll for payment status from the frontend (e.g., "Waiting for payment..." spinner), you may need to implement a status check loop. Ensure you have access to a public status endpoint if the user is not logged in.*
 
@@ -90,4 +98,3 @@ Handle common HTTP status codes:
 - **201 Created**: Success.
 - **400 Bad Request**: Invalid input (e.g., missing fields, invalid email).
 - **500 Internal Server Error**: Payment provider connection failed.
-

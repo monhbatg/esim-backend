@@ -956,7 +956,8 @@ export class TransactionsService {
       invoice_receiver_code: dto.phoneNumber,
       invoice_description: dto.packageCode+', '+dto.phoneNumber+', Захиалга' || 'Customer eSIM Purchase',
       amount:  dataPackage.buyPrice, // Use buyPrice from DB if available, else fallback to dto.amount
-      callback_url: `${process.env.API_URL || 'http://localhost:3000'}/customer/transactions/callback/${senderInvoiceNo}`,
+      // amount: dto.amount|| 0,
+      callback_url: `https://esim-backend.vercel.app/api/transactions/qpay-callback/${encodeURIComponent(senderInvoiceNo)}`,
       invoice_receiver_data: {
         register: '',
         name: dto.email.split('@')[0],
@@ -1273,6 +1274,15 @@ export class TransactionsService {
   ): Promise<EsimInvoice | null> {
     return await this.esimInvoiceRepository.findOne({
       where: { qpayInvoiceId },
+      relations: ['customer'],
+    });
+  }
+
+  async getEsimInvoiceBySenderInvoiceNo(
+    senderInvoiceNo: string,
+  ): Promise<EsimInvoice | null> {
+    return await this.esimInvoiceRepository.findOne({
+      where: { senderInvoiceNo },
       relations: ['customer'],
     });
   }

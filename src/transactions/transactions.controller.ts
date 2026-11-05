@@ -900,7 +900,35 @@ export class TransactionsController {
     };
   }
 
-  
+  @Post('qpay-callback/:senderInvoiceNo')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Handle QPay payment callback',
+    description:
+      'Verifies the invoice directly with QPay and automatically fulfills a paid customer purchase or top-up.',
+  })
+  async handleQpayCallback(
+    @Param('senderInvoiceNo') senderInvoiceNo: string,
+  ): Promise<unknown> {
+    const esimInvoice =
+      await this.transactionsService.getEsimInvoiceBySenderInvoiceNo(
+        senderInvoiceNo,
+      );
+
+    if (!esimInvoice?.qpayInvoiceId) {
+      throw new NotFoundException(
+        `Invoice not found for sender invoice number: ${senderInvoiceNo}`,
+      );
+    }
+
+    if (esimInvoice.iccId) {
+      return this.transactionsService.topupEsim(esimInvoice.qpayInvoiceId);
+    }
+
+    return this.checkInvoiceStatus(esimInvoice.qpayInvoiceId);
+  }
+
   @Post('checkTopup/:invoiceId')
   @Public()
   @HttpCode(HttpStatus.OK)
