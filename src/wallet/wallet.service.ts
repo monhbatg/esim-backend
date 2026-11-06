@@ -10,6 +10,7 @@ import { Repository, DataSource } from 'typeorm';
 import { Wallet } from '../entities/wallet.entity';
 import { User } from '../entities/user.entity';
 import { WALLET_CONSTANTS } from './constants/wallet.constants';
+import { MailService } from 'src/transactions/services/mail.service';
 
 @Injectable()
 export class WalletService {
@@ -21,6 +22,7 @@ export class WalletService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly dataSource: DataSource,
+    private readonly mailService: MailService,
   ) {}
 
   /**
@@ -103,109 +105,25 @@ export class WalletService {
    * @throws NotFoundException if user/wallet not found
    * @throws BadRequestException if amount is invalid
    */
-  async addBalance(userId: string, amount: number): Promise<Wallet> {
+  async addBalanceRequest(userId: string, amount: number): Promise<Wallet> {
     // Validate amount
     this.validateAmount(amount);
-
-    // Retry logic for optimistic locking conflicts
-    let attempts = 0;
-    while (attempts < WALLET_CONSTANTS.MAX_RETRY_ATTEMPTS) {
-      try {
-        return await this.dataSource.transaction(async (manager) => {
-          const walletRepository = manager.getRepository(Wallet);
-
-          // Get wallet with lock
-          let wallet = await walletRepository.findOne({
-            where: { userId },
-            lock: { mode: 'pessimistic_write' },
+    this.logger.log(`Adding balance: User ${userId}, Amount: ${amount}`);
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    const addFundHTML = this.addFundMailBuilder(user!, amount);
+    await this.mailService.sendMail(
+        'javhaa08@gmail.com',
+        'Goy eSIM add Fund',
+        addFundHTML,
+      );
+    //customer add fund request and sent to email to admin
+    let wallet = await this.walletRepository.findOne({
+            where: { userId }
           });
-
-          if (!wallet) {
-            // Create wallet if it doesn't exist
-            const user = await this.userRepository.findOne({
-              where: { id: userId },
-            });
-
-            if (!user) {
-              throw new NotFoundException('User not found');
-            }
-
-            wallet = walletRepository.create({
-              userId,
-              balance: 0,
-              currency: this.validateCurrency(
-                user.preferredCurrency || WALLET_CONSTANTS.DEFAULT_CURRENCY,
-              ),
-              isActive: true,
-            });
-          }
-
-          // Validate wallet state
-          this.validateWalletState(wallet);
-
-          // Increment balance
-          const previousBalance = Number(wallet.balance || 0);
-          const newBalance = previousBalance + amount;
-
-          // Check maximum balance limit
-          if (newBalance > WALLET_CONSTANTS.MAX_BALANCE) {
-            throw new BadRequestException(
-              `Balance cannot exceed ${WALLET_CONSTANTS.MAX_BALANCE.toLocaleString()}. Current: ${previousBalance.toFixed(2)}, Attempted: ${amount.toFixed(2)}`,
-            );
-          }
-
-          wallet.balance = newBalance;
-
-          // Round to 2 decimal places
-          wallet.balance = Math.round(wallet.balance * 100) / 100;
-          wallet.lastTransactionAt = new Date();
-
-          // Save with optimistic locking
-          wallet = await walletRepository.save(wallet);
-
-          this.logger.log(
-            `Balance added: User ${userId}, Amount: ${amount}, Previous: ${previousBalance}, New: ${wallet.balance}`,
-          );
-
-          // TODO: Create transaction record when TransactionModule is implemented
-          // await this.createTransactionRecord({
-          //   walletId: wallet.id,
-          //   userId,
-          //   type: TransactionType.DEPOSIT,
-          //   amount,
-          //   previousBalance,
-          //   newBalance: wallet.balance,
-          //   metadata,
-          // });
-
-          return wallet;
-        });
-      } catch (error) {
-        // Handle optimistic locking conflict
-        if (
-          error instanceof ConflictException ||
-          error.code === '23505' ||
-          error.message?.includes('version')
-        ) {
-          attempts++;
-          if (attempts >= WALLET_CONSTANTS.MAX_RETRY_ATTEMPTS) {
-            this.logger.error(
-              `Failed to add balance after ${attempts} attempts for user ${userId}`,
-            );
-            throw new ConflictException(
-              'Balance update conflict. Please retry.',
-            );
-          }
-          // Wait before retry
-          await new Promise((resolve) =>
-            setTimeout(resolve, WALLET_CONSTANTS.RETRY_DELAY_MS * attempts),
-          );
-          continue;
-        }
-        throw error;
-      }
-    }
-    throw new ConflictException('Failed to update balance after retries');
+    if(wallet)
+      return wallet;
+    else 
+      return new Wallet();
   }
 
   /**
@@ -423,4 +341,111 @@ export class WalletService {
       throw new BadRequestException('Wallet is not active');
     }
   }
+
+  addFundMailBuilder(user: User, amount: number): string{
+      const htmlTopup = `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+  
+          <p>Эрхэм Адман танд,</p>
+  
+          <p>
+            Танд GoySIM харилцагчаас Данс цэнэглэлт хийлгэх хүсэлт илгээсэн байна.
+          </p>
+  
+          <p><strong>Цэнэглэлт хийлгэх мэдээлэл:</strong></p>
+  
+          <table cellpadding="10" cellspacing="0" border="0" border-spacing="0">
+            <tr>
+              <!-- INFO BOX -->
+              <td>
+                <div style="
+                  background:#bfe797;
+                  padding:8px;
+                  border-radius:8px;
+                  width:450px;
+                  font-size:14px;
+                ">
+                  <table width="100%" cellpadding="8" cellspacing="0"
+                  style="border-collapse:collapse; font-family:Arial,sans-serif; font-size:14px;">
+
+                        <tr>
+                            <td width="50%">
+                                <strong>UserId:</strong> ${user.id}
+                            </td>
+                            <td width="50%">
+                                <strong>Firstname:</strong> ${user.firstName}
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td>
+                                <strong>Lastname:</strong> ${user.lastName}
+                            </td>
+                            <td>
+                                <strong>Phone:</strong> ${user.phoneNumber}
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td>
+                                <strong>Email:</strong> ${user.email}
+                            </td>
+                            <td>
+                                <strong>Amount:</strong> ${amount}төгрөг
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td colspan="2">
+                                <strong>Date:</strong> ${new Date().toLocaleDateString()}
+                            </td>
+                        </tr>
+
+                    </table>
+                  </p>
+                </div>
+              </td>
+            </tr>
+          </table>
+ 
+ 
+          <hr style="margin-top:20px; border:none; border-top:1px solid #e5e5e5;" />
+  
+          <div style="
+            margin-top:16px;
+            font-size:13px;
+            color:#555;
+            line-height:1.6;
+          ">
+            <p style="margin:3px 0;">
+              <span style="color:#34a04b;">🍀</span>
+              <strong>Утас:</strong>
+              <a href="tel:+97670001234" style="color:#34a04b; text-decoration:none;">
+                +976 6001-6363
+              </a>
+            </p>
+  
+            <p style="margin:3px 0;">
+              <span style="color:#34a04b;">🍀</span>
+              <strong>Фэйсбүүк хаяг:</strong>
+              <a href="https://www.facebook.com/GOYeSIM/" target="_blank" style="color:#34a04b; text-decoration:none;">
+                facebook.com/GOYeSIM
+              </a>
+            </p>
+  
+            <p style="margin:3px 0;">
+              <span style="color:#34a04b;">🍀</span>
+              <strong>Вэб сайт:</strong>
+              <a href="https://www.goysim.mn" target="_blank" style="color:#34a04b; text-decoration:none;">
+                www.goysim.mn
+              </a>
+            </p>
+          </div>
+          <p>Хүндэтгэсэн,</p>
+          <strong><p style="color: #34a04b;">GOY eSIM</p></strong>
+        </div>
+        `;
+      return htmlTopup;
+    }
 }
+

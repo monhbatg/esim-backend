@@ -220,7 +220,7 @@ export class TransactionsService {
           newBalance = Number(updatedWallet.balance);
         } else if (createTransactionDto.type === TransactionType.DEPOSIT) {
           // Add balance to wallet
-          updatedWallet = await this.walletService.addBalance(
+          updatedWallet = await this.walletService.addBalanceRequest(
             userId,
             createTransactionDto.amount,
           );

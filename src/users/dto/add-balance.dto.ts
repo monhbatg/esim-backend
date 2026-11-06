@@ -7,15 +7,15 @@ import { Type } from 'class-transformer';
  *
  * @example
  * {
- *   "amount": 100.50
+ *   "amount": 100000
  * }
  */
 export class AddBalanceDto {
   @ApiProperty({
-    example: 100.5,
+    example: 100000,
     description: 'Amount to add to the wallet balance',
-    minimum: 0.01,
-    maximum: 1000000,
+    minimum: 100000,
+    maximum: 10000000,
   })
   @IsNotEmpty({ message: 'Amount is required' })
   @IsNumber(
@@ -24,7 +24,7 @@ export class AddBalanceDto {
   )
   @Type(() => Number)
   @IsPositive({ message: 'Amount must be greater than 0' })
-  @Min(0.01, { message: 'Amount must be at least 0.01' })
-  @Max(1000000, { message: 'Amount cannot exceed 1,000,000' })
+  @Min(100000, { message: 'Amount must be at least 100,000' })
+  @Max(10000000, { message: 'Amount cannot exceed 10,000,000' })
   amount: number;
 }

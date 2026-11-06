@@ -100,7 +100,7 @@ export class WalletController {
     const previousBalance = await this.walletService.getBalance(userId);
 
     // Add balance
-    const wallet = await this.walletService.addBalance(
+    const wallet = await this.walletService.addBalanceRequest(
       userId,
       addBalanceDto.amount,
     );

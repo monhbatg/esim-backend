@@ -5,6 +5,7 @@ import { WalletController } from './wallet.controller';
 import { Wallet } from '../entities/wallet.entity';
 import { User } from '../entities/user.entity';
 import { AuthModule } from '../auth/auth.module';
+import { MailService } from '../transactions/services/mail.service';
 
 @Module({
   imports: [
@@ -12,7 +13,7 @@ import { AuthModule } from '../auth/auth.module';
     forwardRef(() => AuthModule),
   ],
   controllers: [WalletController],
-  providers: [WalletService],
+  providers: [WalletService, MailService],
   exports: [WalletService], // Export for use in TransactionModule later
 })
 export class WalletModule {}
