@@ -8,11 +8,19 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Customer } from './customer.entity';
+import { User } from './user.entity';
 
 @Entity('esim_invoices')
 export class EsimInvoice {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ nullable: true })
+  userId: string | null;
+
+  @ManyToOne(() => User, { onDelete: 'CASCADE', nullable: true })
+  @JoinColumn({ name: 'userId' })
+  user: User | null;
 
   @Column()
   amount: number;

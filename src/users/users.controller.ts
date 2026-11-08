@@ -4,6 +4,7 @@ import {
   Delete,
   ForbiddenException,
   Get,
+  Header,
   HttpCode,
   HttpStatus,
   Param,
@@ -46,6 +47,10 @@ import { AdminService } from './admin.service';
 import type { SalaryReq } from './dto/salary-req.dto';
 import { OperatorService } from './operator.service';
 import { CustomerPurchaseDto } from 'src/transactions/dto/customer-purchase.dto';
+import { UserPurchaseListDto } from './dto/user-purchase-list.dto';
+import { UserDashboardDto } from './dto/user-dashboard.dto';
+import { QueryPackagesDto } from 'src/marketplace/dto/query-packages.dto';
+import { MarketplaceService } from 'src/marketplace/services/marketplace.service';
 
 @ApiTags('users')
 @Controller('users')
@@ -56,6 +61,7 @@ export class UsersController {
     private readonly usersService: UsersService,
     private readonly adminService: AdminService,
     private readonly operatorService: OperatorService,
+    private readonly marketplaceService: MarketplaceService,
 ) {}
 
   @Get('profile')
@@ -702,4 +708,104 @@ export class UsersController {
     //else
       //throw new ForbiddenException;
   }
+
+  // тухайн хэрэглэгч өөрийн захиалгын жагсаалтыг харах боломжтой
+  @Get('my-purchases')
+  @ApiOperation({
+    summary: 'Get user purchases',
+    description: 'Retrieve the authenticated user\'s purchase history',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User purchases retrieved successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  async getUserPurchases(
+    @Request() req: AuthRequest,
+  ): Promise<UserPurchaseListDto[]> {
+    return (await this.usersService.getUserPurchases(req.user.id)) as UserPurchaseListDto[];
+  }
+
+  // Тухайн хэрэглэгчийн идэхтэй и-сим картын жагсаалт 
+
+  // Тухайн харилцагчийн өөрийн дашбоард мэдээлэл (Анх бүртгүүлсэн огноо, Нийт захиалгын тоо, Нийт төлбөрийн дүн, Нийт идэхтэй картын тоо, Нийт идэхгүй картын тоо)
+  @Get('customer-dashboard')
+  @ApiOperation({
+    summary: 'Get customer dashboard',
+    description: 'Retrieve the authenticated customer\'s dashboard information',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Customer dashboard retrieved successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  async getCustomerDashboard(
+    @Request() req: AuthRequest,
+  ): Promise<UserDashboardDto> {
+    return (await this.usersService.getCustomerDashboardInfo(req.user.id));
+  }
+
+  //@Get('customer-dashboard/:customerId')
+
+  //user get packages
+  @Get('packages')
+    @Header(
+      'Cache-Control',
+      'no-store, no-cache, must-revalidate, proxy-revalidate',
+    )
+    @Header('Pragma', 'no-cache')
+    @Header('Expires', '0')
+    @ApiOperation({
+      summary: 'Get eSIM packages by country code',
+      description:
+        'Fetch eSIM data packages from esimaccess API for a specific country. The country_code must match a country_code from the marketplace. Uses locationCode filter internally to query the esimaccess API.',
+    })
+    @ApiQuery({
+      name: 'country_code',
+      required: true,
+      type: String,
+      description:
+        'ISO 2-letter country code (e.g., TH, US, GB) to fetch packages for. Must exist in marketplace.',
+      example: 'TH',
+    })
+    @ApiResponse({
+      status: 200,
+      description: 'eSIM packages retrieved successfully',
+      schema: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            packageCode: { type: 'string' },
+            slug: { type: 'string' },
+            name: { type: 'string' },
+            price: { type: 'number' },
+            currencyCode: { type: 'string' },
+            volume: { type: 'number' },
+            duration: { type: 'number' },
+            durationUnit: { type: 'string' },
+            location: { type: 'string' },
+            description: { type: 'string' },
+          },
+        },
+      },
+    })
+    @ApiResponse({
+      status: 404,
+      description: 'Country not found in marketplace',
+    })
+    async getPackagesByCountryCode(
+      @Request() req: AuthRequest,
+      @Query(ValidationPipe) queryDto: QueryPackagesDto,
+    ): Promise<any[]> {
+      return await this.marketplaceService.getPackagesByCountryCodeUser(
+        queryDto.country_code, req.user.id
+      );
+    }
 }

@@ -9,6 +9,7 @@ import {
   CountryFilterDto,
 } from '../dto/filter-response.dto';
 import { MarketplaceCategoryDto } from '../dto/marketplace-response.dto';
+import { UserMargins } from 'src/entities/user-margins.entity';
 // import { CURRENCY_CONSTANTS } from '../constants/currency.constants';
 
 @Injectable()
@@ -20,6 +21,8 @@ export class MarketplaceService {
     private readonly countryRepository: Repository<Country>,
     @InjectRepository(DataPackageEntity)
     private readonly packageRepository: Repository<DataPackageEntity>,
+    @InjectRepository(UserMargins)
+    private readonly marginsRepository: Repository<UserMargins>
   ) {}
 
   /**
@@ -130,6 +133,32 @@ export class MarketplaceService {
 
     // Remove categories with no countries after filtering
     return result.filter((category) => category.countries.length > 0);
+  }
+
+  async getPackagesByCountryCodeUser(
+    countryCode: string,
+    userId: string,
+  ): Promise<Array<Record<string, unknown>>> {
+    const upperCountryCode = countryCode.toUpperCase();
+    const packages = await this.getPackagesByCountryCode(upperCountryCode);
+    const margins = await this.marginsRepository.findOne({
+      where: { userId },
+    });
+
+    // Apply margins to packages
+    return packages.map((pkg) => {
+      // const margin = margins.find((m) => m.packageId === pkg.id);
+      if (margins) {
+        return {
+          ...pkg,
+          buyPrice: Math.round(
+            (Number(pkg.buyPrice) / 2) * (1 + margins.margin / 100),
+          ),
+        };
+      }
+      return pkg;
+    });
+
   }
 
   /**

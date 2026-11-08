@@ -22,6 +22,11 @@ import { InquiryPackagesService } from 'src/inquiry/services/inquiry.packages.se
 import { MailService } from 'src/transactions/services/mail.service';
 import { DataPackageEntity } from 'src/entities/data-packages.entity';
 import { SystemConfig } from 'src/entities/system-config.entity';
+import { MarketplaceService } from 'src/marketplace/services/marketplace.service';
+import { Region } from 'src/entities/region.entity';
+import { Country } from 'src/entities/country.entity';
+import { Category } from 'src/entities/category.entity';
+import { UserMargins } from 'src/entities/user-margins.entity';
 
 @Module({
   imports: [
@@ -37,12 +42,16 @@ import { SystemConfig } from 'src/entities/system-config.entity';
     Transaction,
     User,
     DataPackageEntity,
-    SystemConfig
+    SystemConfig,
+    Category,
+    Country,
+    Region,
+    UserMargins,
   ]), forwardRef(() => AuthModule)],
   controllers: [UsersController],
   providers: [UsersService, AdminService, OperatorService, TransactionsService, 
-    WalletService, QpayConnectionService, InquiryPackagesService, MailService],
+    WalletService, QpayConnectionService, InquiryPackagesService, MailService, MarketplaceService],
   exports: [UsersService, AdminService, OperatorService, TransactionsService,
-    WalletService, QpayConnectionService, InquiryPackagesService, MailService],
+    WalletService, QpayConnectionService, InquiryPackagesService, MailService, MarketplaceService],
 })
 export class UsersModule {}

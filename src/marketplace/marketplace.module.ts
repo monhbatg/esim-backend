@@ -13,10 +13,11 @@ import { RegionsController } from './controllers/regions.controller';
 import { CountriesController } from './controllers/countries.controller';
 import { CategoriesController } from './controllers/categories.controller';
 import { MarketplaceController } from './controllers/marketplace.controller';
+import { UserMargins } from 'src/entities/user-margins.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Region, Country, Category, DataPackageEntity]),
+    TypeOrmModule.forFeature([Region, Country, Category, DataPackageEntity, UserMargins]),
     InquiryModule,
   ],
   controllers: [

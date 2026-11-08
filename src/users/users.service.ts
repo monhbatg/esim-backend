@@ -23,6 +23,8 @@ import { ReferencesHistory } from '../entities/reference-history.entity';
 import { SalaryReq } from './dto/salary-req.dto';
 import { Salary } from '../entities/salary.entity';
 import { Wallet } from '../entities/wallet.entity';
+import { UserPurchaseListDto } from './dto/user-purchase-list.dto';
+import { UserDashboardDto } from './dto/user-dashboard.dto';
 
 @Injectable()
 export class UsersService {
@@ -281,5 +283,50 @@ export class UsersService {
       where: { role },
       order: { createdAt: 'DESC' },
     });
+  }
+
+  async getUserPurchases(userId: string): Promise<UserPurchaseListDto[]> {
+    const purchases = await this.esimPurchaseRepo.find({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+    });
+    return purchases.map((purchase) => ({
+      id: purchase.id,
+      packageName: purchase.packageName,
+      country: purchase.packageName.split('-')[0], // Assuming packageName format is "Country-Package"
+      date: purchase.createdAt.toDateString(),
+      price: purchase.price,
+    })) as unknown as UserPurchaseListDto[];
+  }
+
+  async getCustomerDashboardInfo(userId: string): Promise<UserDashboardDto> {
+    const totalPurchases = await this.esimPurchaseRepo.count({
+      where: { userId },
+    });
+
+    const lastPurchase = await this.esimPurchaseRepo.findOne({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+    });
+
+    const totalAmountSpent = await this.esimPurchaseRepo
+      .createQueryBuilder('purchase')
+      .select('SUM(purchase.price)', 'total')
+      .where('purchase.userId = :userId', { userId })
+      .getRawOne();
+
+    const lastPurchaseDate = lastPurchase ? lastPurchase.createdAt.toISOString() : null;
+    const lastPurchasePackageName = lastPurchase ? lastPurchase.packageName : null;
+    const lastPurchaseCountry = lastPurchase ? lastPurchase.packageName.split('-')[0] : null;
+
+    // TODO: Implement actual logic to fetch other dashboard stats
+    return {
+      totalPurchases,
+      totalAmountSpent: totalAmountSpent.total ? parseFloat(totalAmountSpent.total) : 0,
+      lastPurchaseDate: lastPurchaseDate,
+      lastPurchasePackageName: lastPurchasePackageName,
+      lastPurchaseCountry: lastPurchaseCountry,
+      lastPurchasePrice: lastPurchase ? lastPurchase.price : null,
+    } as UserDashboardDto;
   }
 }
