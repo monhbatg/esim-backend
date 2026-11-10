@@ -926,7 +926,10 @@ export class TransactionsController {
       return this.transactionsService.topupEsim(esimInvoice.qpayInvoiceId);
     }
 
-    return this.checkInvoiceStatus(esimInvoice.qpayInvoiceId);
+    const orderInfo = await this.checkInvoiceStatus(esimInvoice.qpayInvoiceId);
+    return this.transactionsService.queryEsimPurchases({
+      orderNo: orderInfo.orderNo as string,
+    });
   }
 
   @Post('checkTopup/:invoiceId')
